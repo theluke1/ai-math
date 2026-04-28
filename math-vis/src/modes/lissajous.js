@@ -29,8 +29,10 @@
  */
 
 import * as THREE from 'three'
-import { Pane }  from 'tweakpane'
-import { Axes }  from '../core/axes.js'
+import { gsap }          from 'gsap'
+import { Pane }          from 'tweakpane'
+import { Axes }          from '../core/axes.js'
+import { animatePanel }  from '../core/ui.js'
 import lissajousVert from '../shaders/lissajous.vert'
 import lissajousFrag from '../shaders/lissajous.frag'
 
@@ -46,8 +48,9 @@ const PRESETS = {
 }
 
 export class LissajousMode {
-  constructor(scene) {
-    this.scene = scene
+  constructor(scene, renderer = null) {
+    this.scene    = scene
+    this.renderer = renderer
 
     // --- Parameters (these are read by Tweakpane controls) ---
     this.params = {
@@ -73,7 +76,7 @@ export class LissajousMode {
     this._initBuffers()
     this._buildMesh()
     this._buildUI()
-    this.axes = new Axes(scene)
+    this.axes = new Axes(scene, renderer)
   }
 
   // -------------------------------------------------------------------------
@@ -129,14 +132,15 @@ export class LissajousMode {
   _buildUI() {
     this.pane = new Pane({ title: 'Lissajous' })
 
-    // Position the panel top-right
+    // Position the panel top-right, slide in from the right
     Object.assign(this.pane.element.style, {
       position: 'fixed',
-      top:      '16px',
+      top:      '60px',
       right:    '16px',
       zIndex:   '100',
       width:    '260px',
     })
+    animatePanel(this.pane)
 
     // --- Frequency ratio ---
     const freqFolder = this.pane.addFolder({ title: 'Frequencies  a : b : c', expanded: true })
@@ -174,24 +178,42 @@ export class LissajousMode {
   // Per-frame update — called from main.js animation loop
   // -------------------------------------------------------------------------
 
+  /**
+   * Attach an AudioReactive instance so this mode can modulate its
+   * frequencies from live microphone input.
+   * @param {import('../core/audio.js').AudioReactive} audio
+   */
+  setAudio(audio) { this._audio = audio }
+
   update(dt) {
     const { a, b, c, delta, deltaZ, A, B, C, speed } = this.params
 
-    this.t += dt * speed
+    // Audio modulation — bass warps x-freq, treble warps z-freq.
+    // The stored params never change; this is a per-frame overlay.
+    const audio = this._audio
+    const aLive = audio?.enabled ? a * (1 + audio.bass   * 0.55) : a
+    const bLive = audio?.enabled ? b * (1 + audio.mid    * 0.35) : b
+    const cLive = audio?.enabled ? c * (1 + audio.treble * 0.55) : c
+    const ALive = audio?.enabled ? Math.min(1, A * (1 + audio.bass * 0.25))   : A
+    const BLive = audio?.enabled ? Math.min(1, B * (1 + audio.mid  * 0.25))   : B
 
-    const x = A * Math.sin(a * this.t + delta)
-    const y = B * Math.sin(b * this.t)
-    const z = C * Math.sin(c * this.t + deltaZ)
+    const SAMPLES = Math.max(4, Math.ceil(speed * 4))
+    const step    = (dt * speed) / SAMPLES
 
-    // Shift the entire positions buffer back by one slot (oldest falls off the end)
-    // copyWithin(target, start, end) — copies positions[0..(N-2)*3] → positions[3..(N-1)*3]
-    this._positions.copyWithin(3, 0, (TRAIL_LENGTH - 1) * 3)
+    for (let s = 0; s < SAMPLES; s++) {
+      this.t += step
 
-    this._positions[0] = x
-    this._positions[1] = y
-    this._positions[2] = z
+      const x = ALive * Math.sin(aLive * this.t + delta)
+      const y = BLive * Math.sin(bLive * this.t)
+      const z = C     * Math.sin(cLive * this.t + deltaZ)
 
-    // Tell Three.js the buffer has changed — uploads to GPU next render
+      this._positions.copyWithin(3, 0, (TRAIL_LENGTH - 1) * 3)
+
+      this._positions[0] = x
+      this._positions[1] = y
+      this._positions[2] = z
+    }
+
     this.geometry.attributes.position.needsUpdate = true
   }
 

@@ -4,7 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Math Visualiser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
   <style>
+    /* -----------------------------------------------------------------------
+       Design tokens — palette from reference
+       Black Kite : #222E3C   Garnet     : #112445
+       Aqua Mist  : #A8C9C8   Morning Snow: #F5F4EB
+       Amber Gold : #E8C547   (replaces Tonic Orange — colorblind-safe warm)
+    ----------------------------------------------------------------------- */
+    :root {
+      --col-bg:          #080e22;   /* deepest navy, page background          */
+      --col-nav-bg:      rgba(10, 17, 42, 0.92);  /* garnet navy, nav bar    */
+      --col-nav-border:  rgba(90, 145, 220, 0.13);
+      --col-title:       #a8c9c8;   /* Aqua Mist — nav title                 */
+      --col-label:       rgba(140, 175, 215, 0.38); /* dim section labels    */
+      --col-btn:         rgba(155, 195, 228, 0.44); /* inactive button text  */
+      --col-active:      #e8c547;   /* Amber Gold — active button & underline */
+      --col-active-rgb:  232, 197, 71;
+      --col-panel:       rgba(8, 14, 34, 0.72);
+      --col-soon:        rgba(140, 175, 215, 0.14);
+      --col-overlay:     #080e22;
+      --mode-accent:     var(--col-active);
+      --mode-accent-rgb: var(--col-active-rgb);
+      --mode-muted:      #a8c9c8;
+      --chrome-safe-top: 72px;
+      --chrome-safe-bottom: 72px;
+    }
+
+    body[data-mode="lissajous"]  { --mode-accent: #00ffee; --mode-accent-rgb: 0, 255, 238; --mode-muted: #e8c547; }
+    body[data-mode="fourier"]    { --mode-accent: #7dd3fc; --mode-accent-rgb: 125, 211, 252; --mode-muted: #b8a8ff; }
+    body[data-mode="rose"]       { --mode-accent: #ff6fae; --mode-accent-rgb: 255, 111, 174; --mode-muted: #ffd166; }
+    body[data-mode="mandelbrot"] { --mode-accent: #f8d66d; --mode-accent-rgb: 248, 214, 109; --mode-muted: #6dd6ff; }
+    body[data-mode="julia"]      { --mode-accent: #9cff8f; --mode-accent-rgb: 156, 255, 143; --mode-muted: #f6a6ff; }
+    body[data-mode="newton"]     { --mode-accent: #ff865c; --mode-accent-rgb: 255, 134, 92; --mode-muted: #8ee8ff; }
+    body[data-mode="chaos"]      { --mode-accent: #ff4f6d; --mode-accent-rgb: 255, 79, 109; --mode-muted: #81ffd7; }
+    body[data-mode="pendulum"]   { --mode-accent: #f3c969; --mode-accent-rgb: 243, 201, 105; --mode-muted: #f27462; }
+    body[data-mode="grayscott"]  { --mode-accent: #b9ff54; --mode-accent-rgb: 185, 255, 84; --mode-muted: #5ee7df; }
+
     *, *::before, *::after {
       margin: 0;
       padding: 0;
@@ -12,19 +50,674 @@
     }
 
     body {
-      background: #0a0a1a;
+      background: var(--col-bg);
       overflow: hidden;
-      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-family: 'Electrolize', 'SF Mono', monospace;
+      cursor: none;
+      color: #edf7f6;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 48%, transparent 0 44%, rgba(0, 0, 0, 0.18) 73%, rgba(0, 0, 0, 0.48) 100%),
+        linear-gradient(180deg, rgba(8, 14, 34, 0.30), transparent 18%, transparent 74%, rgba(8, 14, 34, 0.38));
+      mix-blend-mode: multiply;
     }
 
     canvas {
       display: block;
       width: 100vw !important;
       height: 100vh !important;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(var(--mode-accent-rgb), 0.08), transparent 42%),
+        var(--col-bg);
+    }
+
+    /* -----------------------------------------------------------------------
+       Custom cursor — dot + glass lens ring
+    ----------------------------------------------------------------------- */
+    #cursor-dot {
+      position: fixed;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--mode-accent);
+      box-shadow: 0 0 6px rgba(var(--mode-accent-rgb), 0.7);
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      will-change: transform;
+    }
+
+    /* Pixel-accurate boundary of the WebGL lens shader (radius 28px) */
+    #cursor-ring {
+      position: fixed;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(var(--mode-accent-rgb), 0.72);
+      box-shadow:
+        0 0 10px rgba(var(--mode-accent-rgb), 0.20),
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      will-change: transform;
+    }
+
+    /* -----------------------------------------------------------------------
+       Navigation bar — deep navy, Aqua Mist labels, Amber Gold active
+    ----------------------------------------------------------------------- */
+    #nav {
+      position: fixed;
+      top: 12px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      width: min(calc(100vw - 32px), 1320px);
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px 0 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
+        var(--col-nav-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--col-nav-border);
+      border-radius: 8px;
+      box-shadow:
+        0 18px 50px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045);
+      user-select: none;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+    }
+
+    #nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .nav-title {
+      font-size: 13px;
+      letter-spacing: 0.20em;
+      text-transform: uppercase;
+      color: var(--col-title);
+      margin-right: 22px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .nav-title::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mode-accent);
+      box-shadow: 0 0 18px rgba(var(--mode-accent-rgb), 0.92);
+    }
+
+    .nav-divider {
+      width: 1px;
+      height: 16px;
+      background: rgba(168, 201, 200, 0.12);
+      margin: 0 24px;
+      flex-shrink: 0;
+    }
+
+    .nav-section-label {
+      font-size: 9px;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: var(--col-label);
+      margin-right: 12px;
+      white-space: nowrap;
+    }
+
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+    }
+
+    .nav-btn {
+      position: relative;
+      background: rgba(255, 255, 255, 0.015);
+      border: 1px solid transparent;
+      color: var(--col-btn);
+      font-family: inherit;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      padding: 8px 13px;
+      cursor: none;
+      border-radius: 6px;
+      white-space: nowrap;
+      transition:
+        color 0.24s ease,
+        background 0.24s ease,
+        border-color 0.24s ease,
+        box-shadow 0.24s ease;
+    }
+
+    /* Active underline — Amber Gold, slides in from left */
+    .nav-btn::after {
+      content: '';
+      position: absolute;
+      bottom: 5px;
+      left: 14px;
+      right: 14px;
+      height: 1px;
+      background: var(--mode-accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .nav-btn:hover {
+      color: rgba(237, 247, 246, 0.76);
+      background: rgba(var(--mode-accent-rgb), 0.08);
+      border-color: rgba(var(--mode-accent-rgb), 0.14);
+    }
+
+    .nav-btn.active {
+      color: var(--mode-accent);
+      background: rgba(var(--mode-accent-rgb), 0.10);
+      border-color: rgba(var(--mode-accent-rgb), 0.22);
+      box-shadow: inset 0 0 18px rgba(var(--mode-accent-rgb), 0.05);
+    }
+
+    .nav-btn.active::after {
+      transform: scaleX(1);
+    }
+
+    .nav-btn.soon {
+      color: var(--col-soon);
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* -----------------------------------------------------------------------
+       Tweakpane theme override
+       Target .tp-dfwv (root element of every Pane) and recolour using
+       Tweakpane v4's CSS custom properties.
+    ----------------------------------------------------------------------- */
+    .tp-dfwv {
+      --tp-base-background-color:       hsla(224, 52%, 7%, 0.88);
+      --tp-base-foreground-color:       hsla(210, 22%, 87%, 1);
+      --tp-container-background-color:  hsla(222, 48%, 12%, 0.38);
+      --tp-container-foreground-color:  hsla(210, 22%, 87%, 1);
+      --tp-input-background-color:      hsla(222, 48%, 10%, 0.55);
+      --tp-input-background-color-active: hsla(222, 48%, 18%, 0.70);
+      --tp-input-foreground-color:      hsla(210, 22%, 87%, 1);
+      --tp-label-foreground-color:      hsla(188, 24%, 70%, 0.86); /* Aqua Mist */
+      --tp-monitor-background-color:    hsla(222, 48%, 9%, 0.50);
+      --tp-monitor-foreground-color:    hsla(188, 24%, 72%, 0.90);
+      --tp-base-shadow-color:           hsla(224, 60%, 4%, 0.60);
+      font-family: 'Electrolize', monospace !important;
+      font-size: 11px !important;
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.18) !important;
+      border-radius: 8px !important;
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.36),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+      overflow: hidden !important;
+      backdrop-filter: blur(22px) saturate(120%);
+      -webkit-backdrop-filter: blur(22px) saturate(120%);
+    }
+
+    /* ── Folder ─────────────────────────────────────────────────────────────── */
+    /* Folder title bar — subtle gold left border on open folders */
+    .tp-fldv_b {
+      border-left: 2px solid rgba(var(--mode-accent-rgb), 0.38) !important;
+    }
+    /* Folder expand/collapse toggle arrow */
+    .tp-fldv_m {
+      color: rgba(168, 201, 200, 0.55) !important;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────────── */
+    .tp-btnv_b {
+      color: var(--mode-accent) !important;
+      border-color: rgba(var(--mode-accent-rgb), 0.25) !important;
+      background: rgba(var(--mode-accent-rgb), 0.06) !important;
+    }
+    .tp-btnv_b:hover {
+      background: rgba(var(--mode-accent-rgb), 0.12) !important;
+    }
+
+    /* ── Sliders ─────────────────────────────────────────────────────────────── */
+    /* Filled portion of the slider track */
+    .tp-sldv_k {
+      background: rgba(168, 201, 200, 0.55) !important;
+    }
+    /* Slider knob handle */
+    .tp-sldv_k::after {
+      background: var(--mode-accent) !important;
+      box-shadow: 0 0 6px rgba(var(--mode-accent-rgb), 0.4) !important;
+    }
+
+    /* ── Booleans / toggles ──────────────────────────────────────────────────── */
+    /* Unchecked toggle border */
+    .tp-ckbv_w {
+      border-color: rgba(90, 145, 220, 0.35) !important;
+      background: hsla(222, 48%, 10%, 0.55) !important;
+    }
+    /* Checked state — amber gold fill */
+    .tp-ckbv_w[data-value="true"],
+    .tp-ckbv_w[aria-checked="true"] {
+      background: rgba(var(--mode-accent-rgb), 0.18) !important;
+      border-color: rgba(var(--mode-accent-rgb), 0.55) !important;
+    }
+    /* The inner checkmark/tick icon */
+    .tp-ckbv_m {
+      color: var(--mode-accent) !important;
+    }
+
+    /* ── Number inputs & text inputs ─────────────────────────────────────────── */
+    .tp-txtv_i,
+    .tp-nplv_u,
+    .tp-nplv_d {
+      color: hsla(210, 22%, 87%, 1) !important;
+    }
+
+    /* ── Panel title (root pane header) ──────────────────────────────────────── */
+    .tp-rotv_t {
+      color: var(--col-title) !important;
+      letter-spacing: 0.12em !important;
+    }
+
+    /* ── Blade row separators ────────────────────────────────────────────────── */
+    .tp-brkv {
+      border-top-color: rgba(90, 145, 220, 0.07) !important;
+    }
+
+    /* ── List / select dropdowns ─────────────────────────────────────────────── */
+    .tp-lstv_s {
+      background: hsla(222, 48%, 10%, 0.80) !important;
+      color: hsla(210, 22%, 87%, 1) !important;
+      border-color: rgba(90, 145, 220, 0.2) !important;
+    }
+
+    /* -----------------------------------------------------------------------
+       Tweakpane guide text — full-width lines injected directly into folders,
+       bypassing the two-column label|value layout that pushed text to the right
+    ----------------------------------------------------------------------- */
+    .tp-guide {
+      padding: 3px 8px 6px;
+    }
+    .tp-guide__line {
+      font-family: 'Electrolize', monospace;
+      font-size:   10.5px;
+      color:       rgba(140, 175, 215, 0.58);
+      line-height: 1.85;
+      letter-spacing: 0.03em;
+    }
+
+    /* -----------------------------------------------------------------------
+       App chrome — mode reveal + compact heads-up display
+    ----------------------------------------------------------------------- */
+    #mode-reveal {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 180;
+      width: min(520px, calc(100vw - 44px));
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .mode-reveal__inner {
+      position: relative;
+      padding: 18px 0;
+      text-align: center;
+    }
+
+    .mode-reveal__inner::before,
+    .mode-reveal__inner::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      width: min(360px, 70vw);
+      height: 1px;
+      transform: translateX(-50%) scaleX(0.32);
+      background: linear-gradient(90deg, transparent, rgba(var(--mode-accent-rgb), 0.74), transparent);
+      opacity: 0.65;
+    }
+
+    .mode-reveal__inner::before { top: 0; }
+    .mode-reveal__inner::after  { bottom: 0; }
+
+    #mode-kicker,
+    .hud-label {
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(168, 201, 200, 0.55);
+    }
+
+    #mode-title {
+      margin-top: 7px;
+      font-size: clamp(30px, 5vw, 56px);
+      line-height: 0.95;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #f5f4eb;
+      text-shadow:
+        0 0 20px rgba(var(--mode-accent-rgb), 0.22),
+        0 0 52px rgba(var(--mode-accent-rgb), 0.16);
+    }
+
+    #mode-equation {
+      margin-top: 12px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      color: var(--mode-accent);
+    }
+
+    #mode-description {
+      width: min(420px, 86vw);
+      margin: 10px auto 0;
+      font-size: 12px;
+      line-height: 1.6;
+      letter-spacing: 0.04em;
+      color: rgba(237, 247, 246, 0.68);
+    }
+
+    #hud {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      z-index: 210;
+      width: min(calc(100vw - 32px), 960px);
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+        rgba(8, 14, 34, 0.74);
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.17);
+      border-radius: 8px;
+      box-shadow:
+        0 20px 56px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045);
+      backdrop-filter: blur(20px) saturate(125%);
+      -webkit-backdrop-filter: blur(20px) saturate(125%);
+      user-select: none;
+    }
+
+    .hud-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .hud-readout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3px;
+      min-width: 0;
+      padding: 0 6px;
+    }
+
+    #hud-mode {
+      overflow: hidden;
+      color: #f5f4eb;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #hud-equation {
+      overflow: hidden;
+      max-width: 44vw;
+      color: rgba(168, 201, 200, 0.66);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hud-pill,
+    .hud-btn {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.18);
+      border-radius: 6px;
+      background: rgba(var(--mode-accent-rgb), 0.065);
+      color: rgba(237, 247, 246, 0.78);
+      font-family: inherit;
+      letter-spacing: 0.08em;
+    }
+
+    .hud-pill {
+      min-width: 68px;
+      padding: 0 12px;
+      color: var(--mode-accent);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .hud-btn {
+      width: 38px;
+      cursor: none;
+      font-size: 13px;
+      transition:
+        color 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.2s ease;
+    }
+
+    .hud-btn:hover {
+      color: #ffffff;
+      background: rgba(var(--mode-accent-rgb), 0.14);
+      border-color: rgba(var(--mode-accent-rgb), 0.36);
+      transform: translateY(-1px);
+    }
+
+    .hud-btn.active {
+      color: var(--mode-accent);
+      background: rgba(var(--mode-accent-rgb), 0.18);
+      box-shadow: 0 0 18px rgba(var(--mode-accent-rgb), 0.12);
+    }
+
+    #toast {
+      position: fixed;
+      right: 18px;
+      bottom: 82px;
+      z-index: 220;
+      max-width: min(340px, calc(100vw - 36px));
+      padding: 10px 12px;
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.22);
+      border-radius: 7px;
+      background: rgba(8, 14, 34, 0.86);
+      color: rgba(237, 247, 246, 0.78);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      line-height: 1.5;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    /* -----------------------------------------------------------------------
+       Mode transition overlay
+    ----------------------------------------------------------------------- */
+    #transition-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 150;
+      background: var(--col-overlay);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    @media (max-width: 1180px) {
+      .nav-section-label {
+        display: none;
+      }
+
+      .nav-divider {
+        margin: 0 12px;
+      }
+
+      .nav-btn {
+        padding-inline: 11px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      :root {
+        --chrome-safe-top: 16px;
+        --chrome-safe-bottom: 122px;
+      }
+
+      body {
+        cursor: auto;
+      }
+
+      #cursor-dot,
+      #cursor-ring {
+        display: none;
+      }
+
+      #nav {
+        top: auto;
+        bottom: 12px;
+        min-height: 54px;
+        padding: 8px 10px;
+      }
+
+      .nav-title,
+      .nav-divider {
+        display: none;
+      }
+
+      .nav-btn,
+      .hud-btn {
+        cursor: pointer;
+      }
+
+      .nav-btn {
+        font-size: 12px;
+        padding: 8px 10px;
+      }
+
+      #hud {
+        top: 12px;
+        bottom: auto;
+        align-items: stretch;
+      }
+
+      #hud-equation,
+      .hud-label,
+      #hud-fps {
+        display: none;
+      }
+
+      .hud-pill {
+        min-width: 54px;
+      }
+
+      .tp-dfwv {
+        max-width: calc(100vw - 24px) !important;
+        top: 76px !important;
+        right: 12px !important;
+        width: 248px !important;
+      }
+
+      #toast {
+        right: 12px;
+        bottom: 82px;
+      }
     }
   </style>
 </head>
 <body>
+
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+  <div id="transition-overlay"></div>
+
+  <section id="mode-reveal" aria-hidden="true">
+    <div class="mode-reveal__inner">
+      <div id="mode-kicker">Now observing</div>
+      <h1 id="mode-title">Lissajous</h1>
+      <div id="mode-equation">x = A sin(at + delta)</div>
+      <p id="mode-description">A luminous parametric orbit drawn as a living trail.</p>
+    </div>
+  </section>
+
+  <nav id="nav">
+    <span class="nav-title">math vis</span>
+
+    <div class="nav-divider"></div>
+    <span class="nav-section-label">Periodic</span>
+    <div class="nav-group" id="nav-periodic">
+      <button class="nav-btn active" data-mode="lissajous" data-label="Lissajous">Lissajous</button>
+      <button class="nav-btn"        data-mode="fourier"   data-label="Fourier">Fourier</button>
+      <button class="nav-btn"        data-mode="rose"      data-label="Rose">Rose</button>
+    </div>
+
+    <div class="nav-divider"></div>
+    <span class="nav-section-label">Fractal</span>
+    <div class="nav-group" id="nav-fractal">
+      <button class="nav-btn" data-mode="mandelbrot" data-label="Mandelbrot">Mandelbrot</button>
+      <button class="nav-btn" data-mode="julia"      data-label="Julia">Julia</button>
+      <button class="nav-btn" data-mode="newton"     data-label="Newton">Newton</button>
+    </div>
+
+    <div class="nav-divider"></div>
+    <span class="nav-section-label">Chaos</span>
+    <div class="nav-group" id="nav-chaos">
+      <button class="nav-btn" data-mode="chaos"    data-label="Attractors">Attractors</button>
+      <button class="nav-btn" data-mode="pendulum" data-label="Pendulum">Pendulum</button>
+    </div>
+
+    <div class="nav-divider"></div>
+    <span class="nav-section-label">Emergence</span>
+    <div class="nav-group" id="nav-emergence">
+      <button class="nav-btn" data-mode="grayscott" data-label="Gray-Scott">Gray-Scott</button>
+    </div>
+  </nav>
+
+  <aside id="hud" aria-label="Visualization status">
+    <div class="hud-cluster">
+      <div class="hud-readout">
+        <span class="hud-label">Active system</span>
+        <strong id="hud-mode">Lissajous</strong>
+        <span id="hud-equation">x = A sin(at + delta)</span>
+      </div>
+    </div>
+    <div class="hud-cluster">
+      <span id="hud-audio" class="hud-pill">Audio off</span>
+      <span id="hud-fps" class="hud-pill">-- fps</span>
+      <button id="pause-btn" class="hud-btn" type="button" title="Pause animation" aria-label="Pause animation">II</button>
+      <button id="capture-btn" class="hud-btn" type="button" title="Save PNG" aria-label="Save PNG">PNG</button>
+      <button id="fullscreen-btn" class="hud-btn" type="button" title="Fullscreen" aria-label="Fullscreen">[]</button>
+    </div>
+  </aside>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
