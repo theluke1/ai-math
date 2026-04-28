@@ -98,21 +98,49 @@ const modeReveal = {
   description: document.getElementById('mode-description'),
 }
 
+const modeNote = {
+  title:       document.getElementById('note-title'),
+  equation:    document.getElementById('note-equation'),
+  description: document.getElementById('note-description'),
+}
+
 const hud = {
   mode:       document.getElementById('hud-mode'),
   equation:   document.getElementById('hud-equation'),
   audio:      document.getElementById('hud-audio'),
   fps:        document.getElementById('hud-fps'),
+  controlsHandle: document.getElementById('controls-handle'),
+  controls:   document.getElementById('controls-btn'),
+  analytics:  document.getElementById('analytics-btn'),
   pause:      document.getElementById('pause-btn'),
   capture:    document.getElementById('capture-btn'),
   fullscreen: document.getElementById('fullscreen-btn'),
   toast:      document.getElementById('toast'),
 }
 
+const analyticsPanel = document.getElementById('analytics-panel')
+const analytics = {
+  mode:     document.getElementById('analytics-mode'),
+  fps:      document.getElementById('analytics-fps'),
+  frame:    document.getElementById('analytics-frame'),
+  draws:    document.getElementById('analytics-draws'),
+  geo:      document.getElementById('analytics-geo'),
+  scene:    document.getElementById('analytics-scene'),
+  camera:   document.getElementById('analytics-camera'),
+  pointer:  document.getElementById('analytics-pointer'),
+  audio:    document.getElementById('analytics-audio'),
+  bloom:    document.getElementById('analytics-bloom'),
+  viewport: document.getElementById('analytics-viewport'),
+}
+
 let paused = false
+let controlsVisible = true
+let analyticsVisible = false
 let toastTween = null
 let fpsSampleTime = performance.now()
 let fpsFrames = 0
+let currentFps = 0
+let analyticsSampleTime = performance.now()
 
 function setModeChrome(name, reveal = false) {
   const meta = MODE_META[name] ?? MODE_META.lissajous
@@ -121,8 +149,12 @@ function setModeChrome(name, reveal = false) {
   modeReveal.title.textContent = meta.title
   modeReveal.equation.textContent = meta.equation
   modeReveal.description.textContent = meta.description
+  modeNote.title.textContent = meta.title
+  modeNote.equation.textContent = meta.equation
+  modeNote.description.textContent = meta.description
   hud.mode.textContent = meta.title
   hud.equation.textContent = meta.equation
+  analytics.mode.textContent = meta.title
 
   if (!reveal) return
 
@@ -146,8 +178,68 @@ function showToast(message) {
     .to(hud.toast, { opacity: 0, y: 8, duration: 0.28, ease: 'power2.in' }, '+=1.9')
 }
 
+function setControlsVisible(next) {
+  controlsVisible = next
+  document.body.classList.toggle('controls-hidden', !controlsVisible)
+  hud.controls.classList.toggle('active', controlsVisible)
+  hud.controlsHandle.textContent = controlsVisible ? 'Controls' : 'Show controls'
+  hud.controls.setAttribute('aria-label', controlsVisible ? 'Hide controls' : 'Show controls')
+  hud.controls.setAttribute('title', controlsVisible ? 'Hide controls' : 'Show controls')
+  hud.controlsHandle.setAttribute('aria-label', controlsVisible ? 'Hide controls' : 'Show controls')
+  hud.controlsHandle.setAttribute('title', controlsVisible ? 'Hide controls' : 'Show controls')
+  positionControlPane()
+}
+
+function setAnalyticsVisible(next) {
+  analyticsVisible = next
+  analyticsPanel.classList.toggle('open', analyticsVisible)
+  hud.analytics.classList.toggle('active', analyticsVisible)
+  hud.analytics.setAttribute('aria-label', analyticsVisible ? 'Hide analytics' : 'Show analytics')
+  hud.analytics.setAttribute('title', analyticsVisible ? 'Hide analytics' : 'Show analytics')
+}
+
+function formatVec3(v) {
+  return `${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}`
+}
+
+function positionControlPane() {
+  const panes = document.querySelectorAll('.tp-dfwv')
+  panes.forEach(pane => {
+    Object.assign(pane.style, {
+      position: 'fixed',
+      top: window.innerWidth <= 760 ? '76px' : '126px',
+      right: window.innerWidth <= 760 ? '12px' : '16px',
+      zIndex: '260',
+      width: window.innerWidth <= 760 ? '248px' : (pane.style.width || '260px'),
+      maxWidth: window.innerWidth <= 760 ? 'calc(100vw - 24px)' : 'min(300px, calc(100vw - 32px))',
+      display: 'block',
+    })
+  })
+}
+
+function updateAnalytics(dt) {
+  const info = renderer.webgl.info
+  const renderInfo = info.render
+  const memoryInfo = info.memory
+
+  analytics.fps.textContent = currentFps ? `${currentFps} fps` : '--'
+  analytics.frame.textContent = `${(dt * 1000).toFixed(1)} ms`
+  analytics.draws.textContent = `${renderInfo.calls} render passes`
+  analytics.geo.textContent = `${memoryInfo.geometries} shapes, ${memoryInfo.textures} textures`
+  analytics.scene.textContent = `${renderer.scene.children.length} visible parts`
+  analytics.camera.textContent = formatVec3(renderer.camera.position)
+  analytics.pointer.textContent = `${renderer._mouse.x.toFixed(2)}, ${renderer._mouse.y.toFixed(2)}`
+  analytics.audio.textContent = audio.enabled
+    ? `bass ${audio.bass.toFixed(2)}, mid ${audio.mid.toFixed(2)}, high ${audio.treble.toFixed(2)}`
+    : 'off'
+  analytics.bloom.textContent = `${renderer.bloomPass.strength.toFixed(2)}`
+  analytics.viewport.textContent = `${window.innerWidth} x ${window.innerHeight}`
+}
+
 setModeChrome('lissajous')
 updateAudioChrome()
+setControlsVisible(true)
+requestAnimationFrame(positionControlPane)
 
 // ---------------------------------------------------------------------------
 // Click → ripple distortion
@@ -155,7 +247,7 @@ updateAudioChrome()
 
 window.addEventListener('click', e => {
   // Don't trigger inside the nav or control panels
-  if (e.target.closest('#nav, .tp-dfwv')) return
+  if (e.target.closest('#nav, #hud, #toast, #analytics-panel, .tp-dfwv')) return
   renderer.triggerRipple(e.clientX, e.clientY)
 })
 
@@ -187,6 +279,7 @@ audioBtn.addEventListener('click', async () => {
   }
   audioBtn.classList.toggle('active', audio.enabled)
   activeMode.setAudio?.(audio)
+  updateAudioChrome()
 })
 
 // ── Track loader — hidden file input + nav button ────────────────────────────
@@ -212,6 +305,60 @@ trackInput.addEventListener('change', async () => {
   trackBtn.classList.add('active')
   audioBtn.classList.add('active')
   activeMode.setAudio?.(audio)
+  updateAudioChrome()
+  showToast(`Loaded ${file.name}`)
+})
+
+hud.controls.addEventListener('click', () => {
+  setControlsVisible(!controlsVisible)
+  showToast(controlsVisible ? 'Controls visible' : 'Controls hidden')
+})
+
+hud.controlsHandle.addEventListener('click', () => {
+  setControlsVisible(!controlsVisible)
+  showToast(controlsVisible ? 'Controls visible' : 'Controls hidden')
+})
+
+hud.analytics.addEventListener('click', () => {
+  setAnalyticsVisible(!analyticsVisible)
+  showToast(analyticsVisible ? 'Analytics visible' : 'Analytics hidden')
+})
+
+hud.pause.addEventListener('click', () => {
+  paused = !paused
+  hud.pause.classList.toggle('active', paused)
+  hud.pause.textContent = paused ? 'GO' : 'II'
+  hud.pause.setAttribute('aria-label', paused ? 'Resume animation' : 'Pause animation')
+  hud.pause.setAttribute('title', paused ? 'Resume animation' : 'Pause animation')
+  showToast(paused ? 'Animation paused' : 'Animation resumed')
+})
+
+hud.capture.addEventListener('click', () => {
+  renderer.render()
+  const link = document.createElement('a')
+  const mode = (hud.mode.textContent || 'math-vis').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  link.download = `${mode || 'math-vis'}-${new Date().toISOString().slice(0, 10)}.png`
+  link.href = renderer.domElement.toDataURL('image/png')
+  link.click()
+  showToast('Saved PNG snapshot')
+})
+
+hud.fullscreen.addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen()
+      hud.fullscreen.classList.add('active')
+    } else {
+      await document.exitFullscreen()
+      hud.fullscreen.classList.remove('active')
+    }
+  } catch {
+    showToast('Fullscreen is blocked by this browser')
+  }
+})
+
+document.addEventListener('fullscreenchange', () => {
+  hud.fullscreen.classList.toggle('active', Boolean(document.fullscreenElement))
 })
 
 // ---------------------------------------------------------------------------
@@ -291,7 +438,7 @@ navBtns.forEach(btn => {
     if (btn.classList.contains('active') || transitioning) return
     navBtns.forEach(b => b.classList.remove('active'))
     btn.classList.add('active')
-    switchTo(btn.dataset.mode, btn.dataset.label ?? btn.dataset.mode)
+    switchTo(btn.dataset.mode)
   })
 })
 
@@ -299,8 +446,9 @@ navBtns.forEach(btn => {
 // Mode switching — choreographed GSAP timeline
 // ---------------------------------------------------------------------------
 
-function switchTo(name, _label) {
+function switchTo(name) {
   transitioning = true
+  setModeChrome(name, true)
 
   // ── Phase 1: exit current scene ───────────────────────────────────────────
   const exitTl = gsap.timeline({
@@ -342,6 +490,8 @@ function enterScene(name) {
     case 'julia':      activeMode = new JuliaMode(renderer.scene, renderer);      break
   }
 
+  requestAnimationFrame(positionControlPane)
+
   // Re-add particles to the scene (scene.clear() removed them)
   renderer.scene.add(particles._pointsBlue)
   renderer.scene.add(particles._pointsAmber)
@@ -370,6 +520,7 @@ function enterScene(name) {
 
 window.addEventListener('resize', () => {
   if (activeMode.onResize) activeMode.onResize()
+  positionControlPane()
 })
 
 // ---------------------------------------------------------------------------
@@ -381,9 +532,17 @@ function tick() {
   const now = performance.now()
   const dt  = Math.min((now - prevTime) / 1000, 0.05)
   prevTime  = now
+  fpsFrames += 1
+
+  if (now - fpsSampleTime > 500) {
+    currentFps = Math.round((fpsFrames * 1000) / (now - fpsSampleTime))
+    hud.fps.textContent = `${currentFps} fps`
+    fpsFrames = 0
+    fpsSampleTime = now
+  }
 
   // Audio — read FFT every frame
-  audio.update()
+  if (!paused) audio.update()
 
   // Bloom responds to audio overall amplitude — but only in modes that use bloom.
   // Mandelbrot disables bloom entirely (bloomPass.strength = 0) to prevent
@@ -393,10 +552,17 @@ function tick() {
   }
 
   // Particle field — cursor NDC from renderer's internal mouse tracker
-  particles.update(dt, renderer._mouse)
+  if (!paused) {
+    particles.update(dt, renderer._mouse)
 
-  activeMode.update(dt)
+    activeMode.update(dt)
+  }
   renderer.render()
+
+  if (analyticsVisible && now - analyticsSampleTime > 180) {
+    updateAnalytics(dt)
+    analyticsSampleTime = now
+  }
 }
 
 tick()

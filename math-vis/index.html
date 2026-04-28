@@ -268,8 +268,63 @@
         0 24px 70px rgba(0, 0, 0, 0.36),
         inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
       overflow: hidden !important;
+      top: 126px !important;
+      z-index: 240 !important;
       backdrop-filter: blur(22px) saturate(120%);
       -webkit-backdrop-filter: blur(22px) saturate(120%);
+    }
+
+    #controls-panel {
+      position: fixed;
+      right: 16px;
+      top: 84px;
+      z-index: 260;
+      width: min(300px, calc(100vw - 32px));
+      max-height: calc(100vh - 176px);
+      padding: 10px;
+      overflow: auto;
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.20);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+        rgba(8, 14, 34, 0.74);
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.36),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(22px) saturate(120%);
+      -webkit-backdrop-filter: blur(22px) saturate(120%);
+      transition:
+        opacity 0.22s ease,
+        transform 0.22s ease;
+    }
+
+    #controls-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #controls-panel::-webkit-scrollbar-thumb {
+      background: rgba(var(--mode-accent-rgb), 0.24);
+      border-radius: 999px;
+    }
+
+    body.controls-hidden #controls-panel {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(18px);
+    }
+
+    #controls-panel .tp-dfwv {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      width: 100% !important;
+      max-width: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
     }
 
     /* ── Folder ─────────────────────────────────────────────────────────────── */
@@ -454,6 +509,12 @@
       backdrop-filter: blur(20px) saturate(125%);
       -webkit-backdrop-filter: blur(20px) saturate(125%);
       user-select: none;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    #hud::-webkit-scrollbar {
+      display: none;
     }
 
     .hud-cluster {
@@ -514,7 +575,9 @@
     }
 
     .hud-btn {
-      width: 38px;
+      min-width: 38px;
+      width: auto;
+      padding: 0 10px;
       cursor: none;
       font-size: 13px;
       transition:
@@ -537,6 +600,13 @@
       box-shadow: 0 0 18px rgba(var(--mode-accent-rgb), 0.12);
     }
 
+    .hud-pill.active {
+      color: #07101f;
+      background: var(--mode-accent);
+      border-color: transparent;
+      box-shadow: 0 0 22px rgba(var(--mode-accent-rgb), 0.18);
+    }
+
     #toast {
       position: fixed;
       right: 18px;
@@ -556,6 +626,146 @@
       transform: translateY(8px);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
+    }
+
+    #mode-note {
+      position: fixed;
+      left: 16px;
+      top: 84px;
+      z-index: 205;
+      width: min(310px, calc(100vw - 32px));
+      padding: 12px 13px;
+      border-left: 2px solid rgba(var(--mode-accent-rgb), 0.64);
+      border-radius: 0 8px 8px 0;
+      background:
+        linear-gradient(90deg, rgba(var(--mode-accent-rgb), 0.10), transparent 70%),
+        rgba(8, 14, 34, 0.58);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(16px) saturate(115%);
+      -webkit-backdrop-filter: blur(16px) saturate(115%);
+      pointer-events: none;
+    }
+
+    #note-title {
+      color: #f5f4eb;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    #note-equation {
+      margin-top: 6px;
+      color: var(--mode-accent);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      line-height: 1.45;
+    }
+
+    #note-description {
+      margin-top: 7px;
+      color: rgba(237, 247, 246, 0.66);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      line-height: 1.55;
+    }
+
+    #analytics-panel {
+      position: fixed;
+      left: 16px;
+      top: 224px;
+      z-index: 235;
+      width: 244px;
+      padding: 12px;
+      border: 1px solid rgba(var(--mode-accent-rgb), 0.18);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+        rgba(8, 14, 34, 0.78);
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px) saturate(125%);
+      -webkit-backdrop-filter: blur(20px) saturate(125%);
+      transform: translateX(-14px);
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        opacity 0.22s ease,
+        transform 0.22s ease,
+        border-color 0.22s ease;
+    }
+
+    #analytics-panel.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .analytics-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(90, 145, 220, 0.10);
+    }
+
+    .analytics-title strong {
+      color: #f5f4eb;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .analytics-title span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mode-accent);
+      box-shadow: 0 0 16px rgba(var(--mode-accent-rgb), 0.65);
+    }
+
+    .analytics-help {
+      margin-top: 8px;
+      color: rgba(237, 247, 246, 0.58);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+      line-height: 1.5;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 7px;
+      padding-top: 10px;
+    }
+
+    .analytics-row {
+      display: grid;
+      grid-template-columns: minmax(108px, 1fr) auto;
+      align-items: baseline;
+      gap: 12px;
+      min-height: 20px;
+    }
+
+    .analytics-row dt {
+      color: rgba(168, 201, 200, 0.52);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .analytics-row dd {
+      max-width: 128px;
+      overflow: hidden;
+      color: rgba(237, 247, 246, 0.82);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     /* -----------------------------------------------------------------------
@@ -637,11 +847,23 @@
         min-width: 54px;
       }
 
-      .tp-dfwv {
-        max-width: calc(100vw - 24px) !important;
-        top: 76px !important;
+      #controls-panel {
+        max-height: calc(100vh - 148px);
+        top: 76px;
         right: 12px !important;
         width: 248px !important;
+      }
+
+      #analytics-panel {
+        left: 12px;
+        top: 220px;
+        width: min(248px, calc(100vw - 24px));
+      }
+
+      #mode-note {
+        left: 12px;
+        top: 76px;
+        width: min(280px, calc(100vw - 24px));
       }
 
       #toast {
@@ -710,10 +932,41 @@
     <div class="hud-cluster">
       <span id="hud-audio" class="hud-pill">Audio off</span>
       <span id="hud-fps" class="hud-pill">-- fps</span>
+      <button id="controls-btn" class="hud-btn active" type="button" title="Hide controls" aria-label="Hide controls">Controls</button>
+      <button id="analytics-btn" class="hud-btn" type="button" title="Show live stats" aria-label="Show live stats">Stats</button>
       <button id="pause-btn" class="hud-btn" type="button" title="Pause animation" aria-label="Pause animation">II</button>
       <button id="capture-btn" class="hud-btn" type="button" title="Save PNG" aria-label="Save PNG">PNG</button>
       <button id="fullscreen-btn" class="hud-btn" type="button" title="Fullscreen" aria-label="Fullscreen">[]</button>
     </div>
+  </aside>
+
+  <aside id="mode-note" aria-label="Mode explanation">
+    <div id="note-title">Lissajous</div>
+    <div id="note-equation">x = A sin(at + delta)</div>
+    <p id="note-description">A luminous parametric orbit drawn as a living trail.</p>
+  </aside>
+
+  <aside id="controls-panel" aria-label="Mode controls"></aside>
+
+  <aside id="analytics-panel" aria-label="Live analytics">
+    <div class="analytics-title">
+      <strong>Live Stats</strong>
+      <span aria-hidden="true"></span>
+    </div>
+    <p class="analytics-help">A simple readout for how smoothly the visualization is running and what is reacting right now.</p>
+    <dl class="analytics-grid">
+      <div class="analytics-row"><dt>Mode</dt><dd id="analytics-mode">Lissajous</dd></div>
+      <div class="analytics-row"><dt>Smoothness</dt><dd id="analytics-fps">--</dd></div>
+      <div class="analytics-row"><dt>Response</dt><dd id="analytics-frame">--</dd></div>
+      <div class="analytics-row"><dt>Workload</dt><dd id="analytics-draws">--</dd></div>
+      <div class="analytics-row"><dt>Visual Detail</dt><dd id="analytics-geo">--</dd></div>
+      <div class="analytics-row"><dt>Scene Size</dt><dd id="analytics-scene">--</dd></div>
+      <div class="analytics-row"><dt>View Angle</dt><dd id="analytics-camera">--</dd></div>
+      <div class="analytics-row"><dt>Cursor Pull</dt><dd id="analytics-pointer">--</dd></div>
+      <div class="analytics-row"><dt>Audio Reaction</dt><dd id="analytics-audio">off</dd></div>
+      <div class="analytics-row"><dt>Glow Level</dt><dd id="analytics-bloom">--</dd></div>
+      <div class="analytics-row"><dt>Screen</dt><dd id="analytics-viewport">--</dd></div>
+    </dl>
   </aside>
 
   <div id="toast" role="status" aria-live="polite"></div>

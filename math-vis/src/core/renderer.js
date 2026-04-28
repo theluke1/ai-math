@@ -227,6 +227,7 @@ export class Renderer {
     this.webgl = new THREE.WebGLRenderer({
       antialias:       true,
       powerPreference: 'high-performance',
+      preserveDrawingBuffer: true,
     })
     this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.webgl.setSize(window.innerWidth, window.innerHeight)
