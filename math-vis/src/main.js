@@ -505,6 +505,12 @@ function enterExperience() {
 }
 
 // Bento grid card clicks — set entry mode then trigger the same fade
+document.querySelector('.title-home-section')?.addEventListener('click', e => {
+  if (e.target.closest('button, a')) return
+  _entryMode = 'lissajous'
+  enterExperience()
+})
+
 document.querySelectorAll('.title-mode-card').forEach(card => {
   card.addEventListener('click', () => {
     _entryMode = card.dataset.mode
