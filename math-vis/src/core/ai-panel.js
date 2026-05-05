@@ -638,10 +638,21 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
     }
 
     if (!response.ok || !response.body) {
+      let message = ''
+      try {
+        const data = await response.clone().json()
+        message = data.message || data.error || ''
+      } catch {
+        try {
+          message = await response.text()
+        } catch {
+          message = ''
+        }
+      }
       thinking?.remove()
       this._streaming = false
       this._label.classList.remove('streaming')
-      this._lastDemoReason = `Worker returned HTTP ${response.status}`
+      this._lastDemoReason = `Worker returned HTTP ${response.status}${message ? ` — ${String(message).slice(0, 220)}` : ''}`
       return false
     }
 

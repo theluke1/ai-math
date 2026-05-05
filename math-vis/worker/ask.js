@@ -287,7 +287,12 @@ export default {
     }
 
     if (request.method !== 'POST') {
-      return json({ error: 'Method not allowed' }, { status: 405 })
+      return json({
+        ok: true,
+        endpoint: '/ask',
+        method: 'POST required',
+        hasGeminiKey: Boolean(env.GEMINI_API_KEY),
+      }, { status: 405 })
     }
 
     if (!env.GEMINI_API_KEY) {
