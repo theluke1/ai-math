@@ -298,7 +298,6 @@ export default {
     if (!env.GEMINI_API_KEY) {
       return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
     }
-    console.log('[ask] key prefix:', env.GEMINI_API_KEY.slice(0, 8), '...')
 
     let body
     try {

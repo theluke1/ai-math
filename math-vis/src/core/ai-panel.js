@@ -643,15 +643,27 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
         const data = await response.clone().json()
         message = data.message || data.error || ''
       } catch {
-        try {
-          message = await response.text()
-        } catch {
-          message = ''
-        }
+        try { message = await response.text() } catch { message = '' }
       }
       thinking?.remove()
       this._streaming = false
       this._label.classList.remove('streaming')
+
+      // Surface real API errors instead of silently falling back to demo.
+      // 429 = rate limited, 5xx = upstream (Gemini) error.
+      if (response.status === 429) {
+        target.innerHTML = `<p class="ai-error">Rate limit reached — Gemini free tier allows ~15 requests per minute. Wait a moment and try again.</p>`
+        target.scrollTop = 0
+        return true
+      }
+      if (response.status >= 500) {
+        const detail = String(message).slice(0, 320)
+        target.innerHTML = `<p class="ai-error">AI error (${response.status})${detail ? `: ${detail}` : '.'} Check the worker logs.</p>`
+        target.scrollTop = 0
+        return true
+      }
+
+      // 4xx or unknown — fall through to demo
       this._lastDemoReason = `Worker returned HTTP ${response.status}${message ? ` — ${String(message).slice(0, 220)}` : ''}`
       return false
     }
