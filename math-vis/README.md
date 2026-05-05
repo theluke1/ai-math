@@ -1,4 +1,5 @@
 # Prism
+Site: https://ai-math-ald.pages.dev
 
 An interactive 3D mathematics visualisation studio with an AI professor that explains what you're looking at — live equations, rendered with KaTeX, grounded in the current visual state.
 
