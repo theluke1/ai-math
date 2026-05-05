@@ -633,6 +633,30 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
     return payload
   }
 
+  _formatWorkerError(status, message = '') {
+    const text = String(message)
+    const isGeminiQuota =
+      /quota exceeded|exceeded your current quota|rate-limits|rate-limit/i.test(text) ||
+      /"code"\s*:\s*429|code:\s*429/i.test(text)
+
+    if (isGeminiQuota) {
+      return 'Gemini free quota exceeded. Daily request quotas reset at midnight Pacific Time; minute-based limits usually clear after about a minute.'
+    }
+
+    if (status === 429) {
+      return 'Rate limit reached. Wait about a minute and try again, or use the local Math Insight panel while quota clears.'
+    }
+
+    if (status >= 500) {
+      const detail = text
+        .replace(/\s+/g, ' ')
+        .slice(0, 220)
+      return `AI service error (${status})${detail ? `: ${detail}` : '.'}`
+    }
+
+    return `AI request failed (${status}).`
+  }
+
   async _respondFromWorker(question, ctx, { target = this._response, requestKind = 'ask', intent = 'explain' } = {}) {
     this._streaming = true
     this._label.classList.add('streaming')
@@ -665,15 +689,10 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
       this._label.classList.remove('streaming')
 
       // Surface real API errors instead of silently falling back to demo.
-      // 429 = rate limited, 5xx = upstream (Gemini) error.
-      if (response.status === 429) {
-        target.innerHTML = `<p class="ai-error">Rate limit reached — Gemini free tier allows ~15 requests per minute. Wait a moment and try again.</p>`
-        target.scrollTop = 0
-        return true
-      }
-      if (response.status >= 500) {
-        const detail = String(message).slice(0, 320)
-        target.innerHTML = `<p class="ai-error">AI error (${response.status})${detail ? `: ${detail}` : '.'} Check the worker logs.</p>`
+      // Worker 502s can wrap upstream Gemini 429 quota messages, so inspect
+      // the body rather than only the HTTP status.
+      if (response.status === 429 || response.status >= 500) {
+        target.innerHTML = `<p class="ai-error">${this._formatWorkerError(response.status, message)}</p>`
         target.scrollTop = 0
         return true
       }

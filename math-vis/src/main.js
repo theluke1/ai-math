@@ -155,6 +155,9 @@ let fpsSampleTime = performance.now()
 let fpsFrames = 0
 let currentFps = 0
 let analyticsSampleTime = performance.now()
+let liveEquationFrame = 0
+let lastLiveEquation = ''
+let tooltipAnnotationFrame = 0
 
 const INSIGHT_PROMPTS = {
   lissajous: [
@@ -291,7 +294,17 @@ function updateLiveEquation() {
     console.warn('[UI] liveEquation failed:', err)
     equation = fallbackLiveEquation()
   }
+  if (equation === lastLiveEquation) return
+  lastLiveEquation = equation
   liveEq.innerHTML = renderMath(equation)
+}
+
+function scheduleLiveEquationUpdate() {
+  if (liveEquationFrame) return
+  liveEquationFrame = requestAnimationFrame(() => {
+    liveEquationFrame = 0
+    updateLiveEquation()
+  })
 }
 
 function annotateActivePane() {
@@ -302,10 +315,18 @@ function annotateActivePane() {
   }
 }
 
+function scheduleTooltipAnnotation() {
+  if (tooltipAnnotationFrame) return
+  tooltipAnnotationFrame = requestAnimationFrame(() => {
+    tooltipAnnotationFrame = 0
+    annotateActivePane()
+  })
+}
+
 function refreshModeUi() {
   activeMode?.pane?.refresh?.()
-  updateLiveEquation()
-  annotateActivePane()
+  scheduleLiveEquationUpdate()
+  scheduleTooltipAnnotation()
   window.dispatchEvent(new CustomEvent('mathvis:mode-pane-changed', {
     detail: { showControls: controlsVisible },
   }))
@@ -382,17 +403,15 @@ function mountControlPane() {
   if (!activeMode.pane._prismUiWired) {
     activeMode.pane._prismUiWired = true
     activeMode.pane.on?.('change', () => {
-      requestAnimationFrame(updateLiveEquation)
+      scheduleLiveEquationUpdate()
     })
     paneEl.addEventListener('click', () => {
-      requestAnimationFrame(() => {
-        updateLiveEquation()
-        annotateActivePane()
-      })
+      scheduleLiveEquationUpdate()
+      scheduleTooltipAnnotation()
     })
   }
-  annotateActivePane()
-  updateLiveEquation()
+  scheduleTooltipAnnotation()
+  scheduleLiveEquationUpdate()
 }
 
 function updateAnalytics() {
