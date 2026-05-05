@@ -57,8 +57,12 @@
       background: var(--col-bg);
       overflow: hidden;
       font-family: 'Electrolize', 'SF Mono', monospace;
-      cursor: none;
+      cursor: auto;
       color: #edf7f6;
+    }
+
+    body.custom-cursor {
+      cursor: none;
     }
 
     body::after {
@@ -1108,6 +1112,7 @@
       z-index: 9999;
       transform: translate(-50%, -50%);
       will-change: transform;
+      opacity: 0;
     }
 
     /* Pixel-accurate boundary of the WebGL lens shader (radius 28px) */
@@ -1124,6 +1129,12 @@
       z-index: 9998;
       transform: translate(-50%, -50%);
       will-change: transform;
+      opacity: 0;
+    }
+
+    body.custom-cursor #cursor-dot,
+    body.custom-cursor #cursor-ring {
+      opacity: 1;
     }
 
     /* -----------------------------------------------------------------------

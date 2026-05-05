@@ -17,6 +17,17 @@ const escHtml = s =>
 const renderInlineText = s =>
   escHtml(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 
+function normalizeLatexDisplayBlocks(text) {
+  return text
+    .replace(/\\\[((?:.|\n)+?)\\\]/g, (_, math) => `$$${math.trim()}$$`)
+    .replace(/\\begin\{align\*?\}([\s\S]+?)\\end\{align\*?\}/g, (_, math) =>
+      `$$\\begin{aligned}${math.trim()}\\end{aligned}$$`)
+    .replace(/\\begin\{equation\*?\}([\s\S]+?)\\end\{equation\*?\}/g, (_, math) =>
+      `$$${math.trim()}$$`)
+    .replace(/\\begin\{displaymath\}([\s\S]+?)\\end\{displaymath\}/g, (_, math) =>
+      `$$${math.trim()}$$`)
+}
+
 /**
  * Render a full response string to HTML with KaTeX math.
  * Safe to set as innerHTML — all non-math text is HTML-escaped.
@@ -26,6 +37,7 @@ const renderInlineText = s =>
  */
 export function renderMath(text) {
   if (!text) return ''
+  text = normalizeLatexDisplayBlocks(text)
 
   const parts  = []
   let   cursor = 0

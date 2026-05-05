@@ -658,10 +658,13 @@ const cursorRing = document.getElementById('cursor-ring')
 
 // Both dot and ring follow the cursor instantly — the ring must stay
 // pixel-aligned with the WebGL lens shader which uses the raw cursor UV.
-window.addEventListener('mousemove', e => {
-  gsap.set(cursorDot,  { x: e.clientX, y: e.clientY })
-  gsap.set(cursorRing, { x: e.clientX, y: e.clientY })
-})
+if (cursorDot && cursorRing) {
+  window.addEventListener('mousemove', e => {
+    document.body.classList.add('custom-cursor')
+    gsap.set(cursorDot,  { x: e.clientX, y: e.clientY })
+    gsap.set(cursorRing, { x: e.clientX, y: e.clientY })
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Mode switching — choreographed GSAP timeline
