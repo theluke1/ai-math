@@ -352,6 +352,16 @@ const SURFACES = [
   },
 ]
 
+// ── Presets ────────────────────────────────────────────────────────────────
+
+const PRESETS = {
+  'Ring Torus':        { surfaceId: 'ring_torus',    colorMode: 'curvature_K', twist: 0,   inflate: 0,   noise: 0,   pinch: 0 },
+  'Catenoid (saddle)': { surfaceId: 'catenoid',      colorMode: 'curvature_K', twist: 0,   inflate: 0,   noise: 0,   pinch: 0 },
+  'Klein UV':          { surfaceId: 'klein',         colorMode: 'uv',          twist: 0.6, inflate: 0,   noise: 0,   pinch: 0 },
+  'Monkey + noise':    { surfaceId: 'monkey_saddle', colorMode: 'curvature_K', twist: 0,   inflate: 0,   noise: 0.5, pinch: 0 },
+  "Dini's surface":    { surfaceId: 'dini',          colorMode: 'curvature_K', twist: 0,   inflate: 0.2, noise: 0,   pinch: 0 },
+}
+
 // ── SurfacesMode ───────────────────────────────────────────────────────────
 
 export class SurfacesMode {
@@ -892,7 +902,7 @@ export class SurfacesMode {
     }).on('change', ({ value }) => this._setExhibit(value))
 
     // ── Surface folder ───────────────────────────────────────────────────────
-    const surfF = this.pane.addFolder({ title: 'Surface', expanded: true })
+    const surfF = this.pane.addFolder({ title: 'Shape', expanded: true })
 
     // Build surface options grouped by family
     const surfOpts = {}
@@ -901,7 +911,8 @@ export class SurfacesMode {
       label: 'shape', options: surfOpts,
     }).on('change', () => this._rebuildSurface())
 
-    surfF.addBinding(this.params, 'colorMode', {
+    const colorF = this.pane.addFolder({ title: 'Color', expanded: true })
+    colorF.addBinding(this.params, 'colorMode', {
       label: 'color',
       options: {
         'Curvature K': 'curvature_K',
@@ -920,7 +931,7 @@ export class SurfacesMode {
     }).on('change', () => this._rebuildSurface())
 
     // ── Distortion folder ────────────────────────────────────────────────────
-    const distF = this.pane.addFolder({ title: 'Distortions', expanded: true })
+    const distF = this.pane.addFolder({ title: 'Motion', expanded: true })
     distF.addBinding(this.params, 'twist',   { label: 'twist',   min: -2.0, max: 2.0,  step: 0.01 })
       .on('change', () => this._applyDistortionsAndColor())
     distF.addBinding(this.params, 'inflate', { label: 'inflate', min: -1.0, max: 1.5,  step: 0.01 })
@@ -929,6 +940,14 @@ export class SurfacesMode {
       .on('change', () => this._applyDistortionsAndColor())
     distF.addBinding(this.params, 'pinch',   { label: 'pinch',   min:  0.0, max: 1.0,  step: 0.01 })
       .on('change', () => this._applyDistortionsAndColor())
+
+    // ── Presets folder ───────────────────────────────────────────────────────
+    const presetF = this.pane.addFolder({ title: 'Presets', expanded: true })
+    for (const [label, values] of Object.entries(PRESETS)) {
+      presetF.addButton({ title: label }).on('click', () => {
+        this.applyParams({ exhibit: 'surface', ...values })
+      })
+    }
 
     // ── Hopf folder ──────────────────────────────────────────────────────────
     const hopfF = this.pane.addFolder({ title: 'Hopf Fibration', expanded: false })
@@ -954,6 +973,50 @@ export class SurfacesMode {
     ])
 
     animatePanel(this.pane)
+  }
+
+  liveEquation() {
+    const surf = SURFACES.find(s => s.id === this.params.surfaceId)
+    if (this.params.exhibit === 'hopf') {
+      return `$$\\eta:S^3\\to S^2\\quad\\text{Hopf fibers, speed }${this.params.hopfSpeed.toFixed(2)}$$`
+    }
+    if (this.params.exhibit === 'morse') {
+      return `$$f(\\theta,\\phi)=z,\\quad f^{-1}(${this.params.morseT.toFixed(2)})\\text{ shows the current level set}$$`
+    }
+    return [
+      `$$K = \\kappa_1\\kappa_2\\quad\\text{on }\\text{${surf?.name ?? this.params.surfaceId}}$$`,
+      `$$R=${this.params.majorR.toFixed(2)},\\quad r=${this.params.minorR.toFixed(2)},\\quad \\tau=${this.params.twist.toFixed(2)},\\quad \\nu=${this.params.noise.toFixed(2)}$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      exhibit: 'Switch between the surface gallery, Hopf fibers, and Morse level sets.',
+      shape: 'Choose the base parametric surface.',
+      color: 'Choose what quantity drives the surface coloring.',
+      major: 'Large radius for torus-like surfaces.',
+      minor: 'Small tube radius for torus-like surfaces.',
+      twist: 'Rotates cross-sections as they move around the surface.',
+      inflate: 'Pushes points outward or inward from the center.',
+      noise: 'Adds controlled procedural roughness to the surface.',
+      pinch: 'Tightens the surface near selected regions.',
+      spin: 'Rotation rate for the Hopf fibration view.',
+      height: 'Current slicing height for Morse level sets.',
+      animate: 'Animate the Morse sweep through critical levels.',
+      presets: 'Load a named surface and distortion configuration.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this._setExhibit(this.params.exhibit ?? 'surface')
+    if (this.params.exhibit === 'surface') {
+      this._rebuildSurface()
+    } else if (this.params.exhibit === 'morse') {
+      this._applyMorseColors(this.params.morseT)
+    }
+    this.pane?.refresh()
+    return true
   }
 
   // ── Update ────────────────────────────────────────────────────────────────

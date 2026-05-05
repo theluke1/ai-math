@@ -10,6 +10,7 @@
  *   5. GSAP timeline     — mode switch is a choreographed sequence, not parallel fades
  */
 
+import './style.css'
 import { gsap }                from 'gsap'
 import { Renderer }            from './core/renderer.js'
 import { LissajousMode }       from './modes/lissajous.js'
@@ -23,6 +24,8 @@ import { BackgroundParticles } from './core/particles.js'
 import { AudioReactive }       from './core/audio.js'
 import { SpatialVolume }       from './core/spatial-volume.js'
 import { AiPanel }             from './core/ai-panel.js'
+import { renderMath }          from './core/math-render.js'
+import { annotatePanel }       from './core/ui.js'
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -48,42 +51,50 @@ const overlay = document.getElementById('transition-overlay')
 const titleScreen = document.getElementById('title-screen')
 const modeGallery = document.getElementById('mode-gallery')
 const galleryClose = document.getElementById('gallery-close')
+const liveEq = document.getElementById('live-eq')
 
 const MODE_META = {
   lissajous: {
     title: 'Lissajous',
     equation: 'x = A sin(at + delta)',
     description: 'A luminous parametric orbit drawn as a living trail.',
+    tags: ['Parametric', 'Phase', 'Resonance'],
   },
   fourier: {
     title: 'Fourier',
     equation: 'f(t), z(t) = sum A_n e^(i omega_n t)',
     description: 'Rotating phasors build waves and decompose hand-drawn paths.',
+    tags: ['Harmonics', 'Signals', 'Epicycles'],
   },
   rose: {
     title: 'Rose Curves',
     equation: 'r = cos(k theta)',
     description: 'Petal symmetries unfold from polar rhythm and phase.',
+    tags: ['Polar', 'Symmetry', 'Petals'],
   },
   chaos: {
     title: 'Attractors',
     equation: 'dx/dt = sigma(y - x)',
     description: 'Deterministic equations braid paths that never repeat.',
+    tags: ['ODEs', 'Chaos', 'Phase Space'],
   },
   surfaces: {
     title: 'Surfaces',
     equation: 'K = (LN − M²) / (EG − F²)',
     description: 'A gallery of exotic mathematical surfaces — tori, minimal surfaces, algebraic forms — with live distortion and Hopf/Morse exhibits.',
+    tags: ['Curvature', 'Topology', 'Manifolds'],
   },
   knots: {
     title: 'Knots',
     equation: 'r(t) = (R + r·cos(qt))·(cos(pt), sin(pt), 0) + r·sin(qt)·ẑ',
     description: 'Torus knots, the figure-eight, and Borromean rings rendered as smooth tubes with parallel transport framing.',
+    tags: ['Topology', 'Torus Knots', 'Links'],
   },
   complex: {
     title: 'Complex Analysis',
     equation: 'f: ℂ → ℂ,  height = |f(z)|,  color = arg(f(z))',
     description: 'Complex functions as 3D landscapes, Riemann sphere, and multi-sheeted branch surfaces.',
+    tags: ['Complex', 'Domain Color', 'Riemann'],
   },
 }
 
@@ -128,17 +139,9 @@ const hud = {
 const controlsPanel = document.getElementById('controls-panel')
 const analyticsPanel = document.getElementById('analytics-panel')
 const analytics = {
-  mode:     document.getElementById('analytics-mode'),
-  fps:      document.getElementById('analytics-fps'),
-  frame:    document.getElementById('analytics-frame'),
-  draws:    document.getElementById('analytics-draws'),
-  geo:      document.getElementById('analytics-geo'),
-  scene:    document.getElementById('analytics-scene'),
-  camera:   document.getElementById('analytics-camera'),
-  pointer:  document.getElementById('analytics-pointer'),
-  audio:    document.getElementById('analytics-audio'),
-  bloom:    document.getElementById('analytics-bloom'),
-  viewport: document.getElementById('analytics-viewport'),
+  mode: document.getElementById('analytics-mode'),
+  fps:  document.getElementById('analytics-fps'),
+  geo:  document.getElementById('analytics-geo'),
 }
 
 let paused = false
@@ -191,6 +194,51 @@ const INSIGHT_PROMPTS = {
   ],
 }
 
+const INSIGHT_CONCEPT = {
+  lissajous: [
+    'A Lissajous figure traces the path of a point driven by two independent sinusoids: $x(t) = A\\sin(at + \\delta)$ and $y(t) = B\\sin(bt)$.',
+    'The frequency ratio $a:b$ determines closure — rational ratios produce a stable closed figure; irrational ratios slowly fill a rectangle.',
+    'The phase $\\delta$ continuously morphs the curve between a line, an ellipse, and every intermediate shape as it sweeps $0 \\to 2\\pi$.',
+    'Adding a third frequency $c$ along $z$ lifts the figure into three dimensions, producing spatial Lissajous knots.',
+  ].join(' '),
+  fourier: [
+    'The Fourier series decomposes any periodic signal into a sum of rotating phasors: $f(t) = \\sum_{n=1}^{N} A_n \\cos(n\\omega t + \\phi_n)$.',
+    'Each epicycle radius equals the coefficient $A_n$; its rotation speed is $n\\omega$, the $n$-th harmonic of the fundamental frequency $\\omega$.',
+    'Adding more terms sharpens the waveform, but near a sharp jump the partial sum always overshoots by ~9% — the Gibbs phenomenon.',
+    'The drawing mode inverts the process, recovering Fourier coefficients from a hand-traced path via numerical integration.',
+  ].join(' '),
+  rose: [
+    'A rose curve $r = \\cos(k\\theta)$ describes a petal pattern in polar coordinates where $k$ controls petal count.',
+    'When $k$ is odd the curve has exactly $k$ petals; when even it has $2k$, because each petal is traced twice.',
+    'The 3D lift $z = \\sin(n\\theta)$ projects the curve onto a sphere, producing spherical-harmonic-like figures.',
+    'Irrational $k$ produces an open curve that never closes, slowly sweeping a dense annular region.',
+  ].join(' '),
+  chaos: [
+    'A chaotic attractor is the limiting geometry of a deterministic ODE system such as the Lorenz equations: $\\dot{x} = \\sigma(y-x),\\; \\dot{y} = x(\\rho-z)-y,\\; \\dot{z} = xy-\\beta z$.',
+    'The system is deterministic — identical initial conditions always yield identical trajectories — yet nearby paths diverge exponentially, measured by the Lyapunov exponent $\\lambda > 0$.',
+    'The attractor has a fractal dimension between 2 and 3, meaning trajectories explore it forever without exactly repeating.',
+    'The shadow below each trail tracks current divergence; close paths indicate locally stable dynamics.',
+  ].join(' '),
+  surfaces: [
+    'Each surface is coloured by its Gaussian curvature $K = \\kappa_1\\kappa_2$, the product of the two principal curvatures at each point.',
+    'Yellow indicates $K > 0$ (dome); blue indicates $K < 0$ (saddle); cream indicates $K = 0$ (cylinder or flat region).',
+    'The Gauss–Bonnet theorem ties total curvature to topology: $\\iint_S K\\,dA = 2\\pi\\chi$, so the integral over a closed surface equals $2\\pi$ times its Euler characteristic.',
+    'The distortion sliders — twist, inflate, noise, pinch — deform the surface continuously while preserving its parametric structure.',
+  ].join(' '),
+  knots: [
+    'A torus knot $T(p,q)$ winds $p$ times around the longitude of a torus and $q$ times through its hole.',
+    'When $\\gcd(p,q) = 1$ the result is a single closed knot; a common factor $g > 1$ produces a torus link with $g$ components.',
+    'The tube uses a parallel-transport frame which carries the normal without unnecessary spin, avoiding the artefacts of the Frenet frame near inflection points.',
+    'Writhe adds a sinusoidal radial perturbation that changes visual complexity without altering the underlying knot type.',
+  ].join(' '),
+  complex: [
+    'Domain colouring maps $f: \\mathbb{C} \\to \\mathbb{C}$ to a surface where height encodes $|f(z)|$ and hue encodes $\\arg(f(z))$.',
+    'Poles appear as upward spikes; the colour cycles through the full wheel once per unit of winding number around the pole.',
+    'Zeros touch the floor and colour cycles in the opposite direction; branch cuts appear as sharp lines of colour discontinuity.',
+    'The Riemann sphere compactifies $\\mathbb{C}$ by adding a point at infinity via stereographic projection from the north pole.',
+  ].join(' '),
+}
+
 function setModeChrome(name, reveal = false) {
   const meta = MODE_META[name] ?? MODE_META.lissajous
   document.body.dataset.mode = name
@@ -219,11 +267,48 @@ function updateAudioChrome() {
 }
 
 function showToast(message) {
+  if (!hud.toast) return
   hud.toast.textContent = message
   if (toastTween) toastTween.kill()
   toastTween = gsap.timeline()
     .to(hud.toast, { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' })
     .to(hud.toast, { opacity: 0, y: 8, duration: 0.28, ease: 'power2.in' }, '+=1.9')
+}
+
+function fallbackLiveEquation(name = document.body.dataset.mode ?? 'lissajous') {
+  const meta = MODE_META[name] ?? MODE_META.lissajous
+  return `$${meta.equation}$`
+}
+
+function updateLiveEquation() {
+  if (!liveEq) return
+  let equation = ''
+  try {
+    equation = activeMode?.liveEquation?.()
+      ?? activeMode?.equationContext?.()?.equation
+      ?? fallbackLiveEquation()
+  } catch (err) {
+    console.warn('[UI] liveEquation failed:', err)
+    equation = fallbackLiveEquation()
+  }
+  liveEq.innerHTML = renderMath(equation)
+}
+
+function annotateActivePane() {
+  try {
+    annotatePanel(activeMode?.pane, activeMode?.tooltips?.() ?? {})
+  } catch (err) {
+    console.warn('[UI] Control tooltip annotation failed:', err)
+  }
+}
+
+function refreshModeUi() {
+  activeMode?.pane?.refresh?.()
+  updateLiveEquation()
+  annotateActivePane()
+  window.dispatchEvent(new CustomEvent('mathvis:mode-pane-changed', {
+    detail: { showControls: controlsVisible },
+  }))
 }
 
 function setControlsVisible(next) {
@@ -264,16 +349,12 @@ function setSpatialEnabled(next) {
   updateSpatialChrome()
 }
 
-function formatVec3(v) {
-  return `${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}`
-}
-
 function updateInsightPanel(name = document.body.dataset.mode ?? 'lissajous') {
   if (!insightPanel.root) return
   const meta = MODE_META[name] ?? MODE_META.lissajous
   const category = MODE_CATEGORY[name] ?? 'System'
   insightPanel.mode.textContent = `${category} · ${meta.title}`
-  insightPanel.concept.textContent = 'Ask the AI to explain what the system is measuring, how the controls change the behavior, or why the current shape appears.'
+  insightPanel.concept.innerHTML = renderMath(INSIGHT_CONCEPT[name] ?? '')
   insightPanel.chips.replaceChildren(...(INSIGHT_PROMPTS[name] ?? []).map(prompt => {
     const btn = document.createElement('button')
     btn.className = 'insight-prompt'
@@ -298,25 +379,26 @@ function mountControlPane() {
   if (paneEl.parentElement !== controlsPanel) {
     controlsPanel.replaceChildren(paneEl)
   }
+  if (!activeMode.pane._prismUiWired) {
+    activeMode.pane._prismUiWired = true
+    activeMode.pane.on?.('change', () => {
+      requestAnimationFrame(updateLiveEquation)
+    })
+    paneEl.addEventListener('click', () => {
+      requestAnimationFrame(() => {
+        updateLiveEquation()
+        annotateActivePane()
+      })
+    })
+  }
+  annotateActivePane()
+  updateLiveEquation()
 }
 
-function updateAnalytics(dt) {
-  const info = renderer.webgl.info
-  const renderInfo = info.render
-  const memoryInfo = info.memory
-
+function updateAnalytics() {
+  const memoryInfo = renderer.webgl.info.memory
   analytics.fps.textContent = currentFps ? `${currentFps} fps` : '--'
-  analytics.frame.textContent = `${(dt * 1000).toFixed(1)} ms`
-  analytics.draws.textContent = `${renderInfo.calls} render passes`
-  analytics.geo.textContent = `${memoryInfo.geometries} shapes, ${memoryInfo.textures} textures`
-  analytics.scene.textContent = `${renderer.scene.children.length} visible parts`
-  analytics.camera.textContent = formatVec3(renderer.camera.position)
-  analytics.pointer.textContent = `${renderer._mouse.x.toFixed(2)}, ${renderer._mouse.y.toFixed(2)}`
-  analytics.audio.textContent = audio.enabled
-    ? `bass ${audio.bass.toFixed(2)}, mid ${audio.mid.toFixed(2)}, high ${audio.treble.toFixed(2)}`
-    : 'off'
-  analytics.bloom.textContent = `${renderer.bloomPass.strength.toFixed(2)}`
-  analytics.viewport.textContent = `${window.innerWidth} x ${window.innerHeight}`
+  analytics.geo.textContent = `${memoryInfo.geometries} geometries`
 }
 
 function buildDefaultLessonContext(mode, extra = null) {
@@ -365,11 +447,59 @@ function toJsonSafe(value) {
   }
 }
 
-function buildAiContext() {
+function pickContextExtra(mode, extra, intent, requestKind) {
+  if (!extra) return null
+  if (requestKind !== 'ask') return {
+    exhibit: extra.exhibit ?? extra.attractor ?? null,
+    function: extra.function ?? null,
+    sheet: extra.sheet ?? null,
+    note: extra.note ?? null,
+  }
+  if (intent === 'params' || intent === 'equation') return null
+  if (mode === 'chaos') return {
+    attractor: extra.attractor,
+    equations: extra.equations,
+    attractorParams: extra.attractorParams,
+    axes: extra.axes,
+    chaos: extra.chaos,
+  }
+  if (mode === 'rose') return {
+    params: extra.params,
+    interpretation: extra.interpretation,
+  }
+  return {
+    exhibit: extra.exhibit ?? null,
+    function: extra.function ?? null,
+    sheet: extra.sheet ?? null,
+    note: extra.note ?? null,
+  }
+}
+
+function compactLessonContext(mode, lessonContext, requestKind) {
+  if (!lessonContext) return null
+  if (requestKind === 'lesson') return lessonContext
+  if (requestKind === 'variables') return {
+    title: lessonContext.title,
+    equations: lessonContext.equations,
+    variables: lessonContext.variables,
+    parameters: lessonContext.parameters,
+  }
+  if (requestKind === 'examples') return {
+    title: lessonContext.title,
+    bigIdea: lessonContext.bigIdea,
+    equations: lessonContext.equations,
+    realWorld: lessonContext.realWorld,
+  }
+  return { title: lessonContext.title, bigIdea: lessonContext.bigIdea }
+}
+
+function buildAiContext(options = {}) {
+  const { requestKind = 'ask', intent = 'explain' } = options
   const mode = document.body.dataset.mode ?? 'lissajous'
   const extra = callModeHook('aiContext', null)
   const lessonContext = callModeHook('lessonContext', buildDefaultLessonContext(mode, extra))
   const schema = callModeHook('aiSchema', null)
+  const includeSchema = requestKind === 'variables' || intent === 'params'
   return toJsonSafe({
     mode,
     equation: MODE_META[mode]?.equation ?? '',
@@ -377,15 +507,15 @@ function buildAiContext() {
       ...(activeMode?.params ?? {}),
       ...(extra?.params ?? {}),
     },
-    extra,
-    lessonContext,
-    schema,
+    extra: pickContextExtra(mode, extra, intent, requestKind),
+    lessonContext: compactLessonContext(mode, lessonContext, requestKind),
+    schema: includeSchema ? schema : null,
   }) ?? {
     mode,
     equation: MODE_META[mode]?.equation ?? '',
     params: {},
     extra: null,
-    lessonContext: buildDefaultLessonContext(mode, null),
+    lessonContext: { title: MODE_META[mode]?.title ?? mode },
     schema: null,
   }
 }
@@ -394,10 +524,14 @@ setModeChrome('lissajous')
 updateAudioChrome()
 setControlsVisible(true)
 setSpatialEnabled(true)
+updateLiveEquation()
 requestAnimationFrame(mountControlPane)
 window.addEventListener('mathvis:mode-pane-changed', event => {
   if (event.detail?.showControls) setControlsVisible(true)
-  requestAnimationFrame(mountControlPane)
+  requestAnimationFrame(() => {
+    mountControlPane()
+    updateLiveEquation()
+  })
 })
 
 gsap.timeline({ defaults: { ease: 'power3.out' } })
@@ -589,21 +723,21 @@ window.addEventListener('keydown', e => {
 
 window.addEventListener('click', e => {
   // Don't trigger inside the nav or control panels
-  if (e.target.closest('#title-screen, #mode-gallery, #nav, #hud, #mode-tools, #toast, #insight-panel, #controls-panel, #analytics-panel, #ai-panel, .tp-dfwv')) return
+  if (e.target.closest('#title-screen, #mode-gallery, #nav, #hud, #mode-tools, #toast, #live-eq, #insight-panel, #controls-panel, #analytics-panel, #ai-panel, .tp-dfwv')) return
   renderer.triggerRipple(e.clientX, e.clientY)
 })
 
-hud.controls.addEventListener('click', () => {
+hud.controls?.addEventListener('click', () => {
   setControlsVisible(!controlsVisible)
   showToast(controlsVisible ? 'Controls visible' : 'Controls hidden')
 })
 
-hud.analytics.addEventListener('click', () => {
+hud.analytics?.addEventListener('click', () => {
   setAnalyticsVisible(!analyticsVisible)
   showToast(analyticsVisible ? 'Live stats visible' : 'Live stats hidden')
 })
 
-hud.pause.addEventListener('click', () => {
+hud.pause?.addEventListener('click', () => {
   paused = !paused
   hud.pause.classList.toggle('active', paused)
   hud.pause.textContent = paused ? 'GO' : 'II'
@@ -612,7 +746,7 @@ hud.pause.addEventListener('click', () => {
   showToast(paused ? 'Animation paused' : 'Animation resumed')
 })
 
-hud.capture.addEventListener('click', () => {
+hud.capture?.addEventListener('click', () => {
   renderer.render()
   const link = document.createElement('a')
   const mode = (hud.mode.textContent || 'math-vis').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -622,7 +756,45 @@ hud.capture.addEventListener('click', () => {
   showToast('Saved PNG snapshot')
 })
 
-hud.fullscreen.addEventListener('click', async () => {
+const copyParamsBtn = document.getElementById('copy-params-btn')
+const loadParamsBtn = document.getElementById('load-params-btn')
+const loadParamsFile = document.getElementById('load-params-file')
+
+copyParamsBtn?.addEventListener('click', () => {
+  const params = activeMode?.params
+  if (!params) { showToast('No parameters to copy'); return }
+  navigator.clipboard.writeText(JSON.stringify(params, null, 2))
+    .then(() => showToast('Parameters copied'))
+    .catch(() => showToast('Clipboard unavailable'))
+})
+
+loadParamsBtn?.addEventListener('click', () => loadParamsFile?.click())
+loadParamsFile?.addEventListener('change', () => {
+  const file = loadParamsFile.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result)
+      if (!activeMode?.params) { showToast('No active mode'); return }
+      if (activeMode.applyParams?.(parsed)) {
+        // Mode handled its own rebuild/reset.
+      } else {
+        Object.assign(activeMode.params, parsed)
+        activeMode.pane?.refresh()
+      }
+      refreshModeUi()
+      showToast('Parameters loaded')
+    } catch {
+      showToast('Invalid JSON file')
+    } finally {
+      loadParamsFile.value = ''
+    }
+  }
+  reader.readAsText(file)
+})
+
+hud.fullscreen?.addEventListener('click', async () => {
   try {
     if (!document.fullscreenElement) {
       await document.documentElement.requestFullscreen()
@@ -636,7 +808,7 @@ hud.fullscreen.addEventListener('click', async () => {
   }
 })
 
-hud.spatial.addEventListener('click', () => {
+hud.spatial?.addEventListener('click', () => {
   setSpatialEnabled(!spatialEnabled)
   showToast(spatialEnabled && modeSupportsSpatial() ? 'Grid visible' : 'Grid hidden')
 })
@@ -712,7 +884,10 @@ function enterScene(name) {
     case 'complex':    activeMode = new ComplexMode(renderer.scene, renderer);   break
   }
 
-  requestAnimationFrame(mountControlPane)
+  requestAnimationFrame(() => {
+    mountControlPane()
+    updateLiveEquation()
+  })
 
   // Re-add particles to the scene (scene.clear() removed them)
   renderer.scene.add(particles._pointsBlue)
@@ -726,6 +901,7 @@ function enterScene(name) {
   const is2D = ['fourier'].includes(name)
   particles.setVisible(!is2D && name !== 'surfaces' && name !== 'knots' && name !== 'complex')
   updateSpatialChrome()
+  updateLiveEquation()
 
   // ── Phase 2: enter new scene ──────────────────────────────────────────────
   const enterTl = gsap.timeline({
@@ -788,7 +964,7 @@ function tick() {
   renderer.render()
 
   if (analyticsVisible && now - analyticsSampleTime > 180) {
-    updateAnalytics(dt)
+    updateAnalytics()
     analyticsSampleTime = now
   }
 }

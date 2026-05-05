@@ -136,6 +136,16 @@ const KNOTS = [
   },
 ]
 
+// ── Presets ────────────────────────────────────────────────────────────────
+
+const PRESETS = {
+  'Trefoil T(2,3)':    { exhibit: 'trefoil',   p: 2, q: 3, colorMode: 'arc_length', tubeR: 0.12, writhe: 0 },
+  'Cinquefoil T(2,5)': { exhibit: 'cinquefoil', p: 2, q: 5, colorMode: 'arc_length', tubeR: 0.10, writhe: 0 },
+  'T(3,5) curvature':  { exhibit: 'custom',    p: 3, q: 5, colorMode: 'curvature',  tubeR: 0.10, writhe: 0 },
+  'Figure-Eight 4₁':   { exhibit: 'figure8',   p: 2, q: 3, colorMode: 'arc_length', tubeR: 0.12, writhe: 0 },
+  'Borromean Rings':   { exhibit: 'borromean', p: 2, q: 3, colorMode: 'solid',      tubeR: 0.15, writhe: 0 },
+}
+
 // ── Parallel transport frame builder ──────────────────────────────────────
 // More stable than Frenet-Serret near inflection points.
 
@@ -531,8 +541,16 @@ export class KnotsMode {
       label: 'knot', options: exhibitOpts,
     }).on('change', ({ value }) => this._setExhibit(value))
 
+    // Presets
+    const presetF = this.pane.addFolder({ title: 'Presets', expanded: true })
+    for (const [label, values] of Object.entries(PRESETS)) {
+      presetF.addButton({ title: label }).on('click', () => {
+        this.applyParams(values)
+      })
+    }
+
     // T(p,q) controls — torus presets seed these values, then sliders reshape.
-    const pqF = this.pane.addFolder({ title: 'Torus T(p,q)', expanded: true })
+    const pqF = this.pane.addFolder({ title: 'Shape', expanded: true })
     pqF.addBinding(this.params, 'p', {
       label: 'p', min: 2, max: 9, step: 1,
     }).on('change', () => this._rebuildActiveTorus())
@@ -546,7 +564,7 @@ export class KnotsMode {
       'Shared factors split into links.',
     ])
 
-    const styleF = this.pane.addFolder({ title: 'Style', expanded: true })
+    const styleF = this.pane.addFolder({ title: 'Color', expanded: true })
     styleF.addBinding(this.params, 'tubeR', {
       label: 'tube radius', min: 0.04, max: 0.35, step: 0.005,
     }).on('change', () => this._rebuildAll())
@@ -559,6 +577,37 @@ export class KnotsMode {
     }).on('change', () => this._rebuildAll())
 
     animatePanel(this.pane)
+  }
+
+  liveEquation() {
+    const { exhibit, p, q, tubeR, writhe } = this.params
+    if (exhibit === 'borromean') {
+      return `$$\\text{Borromean rings}:\\quad L = L_1\\cup L_2\\cup L_3,\\quad \\operatorname{lk}(L_i,L_j)=0$$`
+    }
+    return [
+      `$$T(${p},${q}):\\quad \\gamma(t)=((R+r\\cos(${q}t))\\cos(${p}t),(R+r\\cos(${q}t))\\sin(${p}t),r\\sin(${q}t))$$`,
+      `$$\\text{tube radius}=${tubeR.toFixed(3)},\\quad \\text{writhe}=${writhe.toFixed(2)}$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      knot: 'Select the knot or link family to display.',
+      p: 'Longitude winding count around the torus.',
+      q: 'Meridian winding count through the torus hole.',
+      tube: 'Thickness of the rendered tube.',
+      color: 'Choose whether color follows arc length, curvature, or a solid material.',
+      writhe: 'Adds a radial perturbation for visual complexity.',
+      presets: 'Load common knots, links, and coloring setups.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this._rebuildAll()
+    this._setExhibit(this.params.exhibit)
+    this.pane?.refresh()
+    return true
   }
 
   _rebuildAll() {

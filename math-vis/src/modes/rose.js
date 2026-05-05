@@ -136,7 +136,8 @@ export class RoseMode {
       label: 'h  (z height)', min: 0, max: 1.0, step: 0.01,
     }).on('change', () => this._reset())
 
-    this.pane.addBinding(this.params, 'speed', {
+    const motionFolder = this.pane.addFolder({ title: 'Motion', expanded: true })
+    motionFolder.addBinding(this.params, 'speed', {
       label: 'speed', min: 0.05, max: 2.0, step: 0.05,
     })
 
@@ -148,6 +149,30 @@ export class RoseMode {
         this._reset()
       })
     }
+  }
+
+  liveEquation() {
+    const { k, n, h } = this.params
+    return [
+      `$$r(\\theta) = \\cos(${k.toFixed(2)}\\theta)$$`,
+      `$$x = r\\cos\\theta,\\quad y = r\\sin\\theta,\\quad z = ${h.toFixed(2)}\\sin(${n.toFixed(2)}\\theta)$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      k: 'Petal rhythm; integers produce clean symmetry, fractions create longer traces.',
+      n: 'Depth wave frequency; it controls how often the rose lifts out of the plane.',
+      h: 'Depth height; set near 0 for a flat polar rose.',
+      speed: 'How quickly theta advances along the curve.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this.pane?.refresh()
+    this._reset()
+    return true
   }
 
   // -------------------------------------------------------------------------

@@ -59,3 +59,46 @@ export function animatePanel(pane, delay = 0.1) {
     })
   })
 }
+
+function normalizeLabel(text) {
+  return String(text ?? '')
+    .toLowerCase()
+    .replace(/[δσρβκχₙ²³⁴₁]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/**
+ * Attach short explanatory tooltips to Tweakpane rows.
+ *
+ * Tweakpane does not expose a stable DOM key on blade rows, so this helper
+ * matches against visible labels and button titles. It is deliberately
+ * best-effort: controls still work normally if a row cannot be matched.
+ *
+ * @param {import('tweakpane').Pane} pane
+ * @param {Record<string, string>} tooltipMap
+ */
+export function annotatePanel(pane, tooltipMap = {}) {
+  if (!pane?.element || !tooltipMap || !Object.keys(tooltipMap).length) return
+
+  requestAnimationFrame(() => {
+    const entries = Object.entries(tooltipMap).map(([key, tip]) => ({
+      key: normalizeLabel(key),
+      rawKey: key,
+      tip,
+    }))
+
+    pane.element.querySelectorAll('.tp-brkv').forEach(row => {
+      const labelEl = row.querySelector('.tp-lblv_l, .tp-btnv_t, .tp-rotv_t')
+      const label = normalizeLabel(labelEl?.textContent || row.textContent)
+      const match = entries.find(({ key, rawKey }) =>
+        label === key ||
+        label.includes(key) ||
+        normalizeLabel(rawKey).split(' ').some(part => part.length > 1 && label.includes(part)))
+
+      if (!match) return
+      row.dataset.tooltip = match.tip
+      row.setAttribute('title', match.tip)
+    })
+  })
+}

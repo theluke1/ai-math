@@ -535,7 +535,7 @@ export class ChaosMode {
     animatePanel(this.pane)
 
     // Attractor selector
-    const attractorFolder = this.pane.addFolder({ title: 'Attractor', expanded: true })
+    const attractorFolder = this.pane.addFolder({ title: 'Presets', expanded: true })
     for (const [key, att] of Object.entries(ATTRACTORS)) {
       attractorFolder.addButton({ title: att.label }).on('click', () => {
         this._switchAttractor(key)
@@ -549,13 +549,14 @@ export class ChaosMode {
     eqFolder.element.appendChild(this._eqEl)
     this._updateEquations()
 
-    // Animation
-    this.pane.addBinding(this.params, 'speed', {
+    // Motion
+    const motionFolder = this.pane.addFolder({ title: 'Motion', expanded: true })
+    motionFolder.addBinding(this.params, 'speed', {
       label: 'speed', min: 0.1, max: 3.0, step: 0.1,
     })
 
     // Shadow trajectory toggle
-    this.pane.addBinding(this.params, 'showShadow', {
+    motionFolder.addBinding(this.params, 'showShadow', {
       label: 'shadow trajectory',
     }).on('change', ({ value }) => {
       this.shadowMesh.visible = value
@@ -572,6 +573,36 @@ export class ChaosMode {
     analyticsFolder.addBinding(this._state, '0', { label: 'x', readonly: true, format: v => v.toFixed(3) })
     analyticsFolder.addBinding(this._state, '1', { label: 'y', readonly: true, format: v => v.toFixed(3) })
     analyticsFolder.addBinding(this._state, '2', { label: 'z', readonly: true, format: v => v.toFixed(3) })
+  }
+
+  liveEquation() {
+    const equations = this._attractor.equations ?? []
+    const params = Object.entries(this._attractor.params ?? {})
+      .map(([key, value]) => `${key}=${Number(value).toFixed(2)}`)
+      .join(', ')
+    return [
+      `$$\\begin{aligned}${equations.map(eq => eq.replace(/=/, '&=')).join('\\\\')}\\end{aligned}$$`,
+      params ? `$$\\text{${this._attractor.label}}\\quad ${params}$$` : `$$\\text{${this._attractor.label}}$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      speed: 'Integration speed; higher values advance more RK4 steps per frame.',
+      shadow: 'Shows a nearby trajectory so divergence is visible.',
+      divergence: 'Distance between the main path and the nearby shadow path.',
+      x: 'Current x state coordinate.',
+      y: 'Current y state coordinate.',
+      z: 'Current z state coordinate.',
+      presets: 'Choose a named chaotic system.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    if (typeof params.showShadow === 'boolean') this.shadowMesh.visible = params.showShadow
+    this.pane?.refresh()
+    return true
   }
 
   _updateEquations() {

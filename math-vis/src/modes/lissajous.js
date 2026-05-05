@@ -141,13 +141,13 @@ export class LissajousMode {
     animatePanel(this.pane)
 
     // --- Frequency ratio ---
-    const freqFolder = this.pane.addFolder({ title: 'Frequencies  a : b : c', expanded: true })
+    const freqFolder = this.pane.addFolder({ title: 'Shape', expanded: true })
     freqFolder.addBinding(this.params, 'a', { label: 'a  (x)', min: 1, max: 12, step: 1 })
     freqFolder.addBinding(this.params, 'b', { label: 'b  (y)', min: 1, max: 12, step: 1 })
     freqFolder.addBinding(this.params, 'c', { label: 'c  (z)', min: 0, max: 12, step: 1 })
 
     // --- Phase & amplitude ---
-    const shapeFolder = this.pane.addFolder({ title: 'Shape', expanded: true })
+    const shapeFolder = this.pane.addFolder({ title: 'Motion', expanded: true })
     shapeFolder.addBinding(this.params, 'delta',  { label: 'δx phase', min: 0, max: Math.PI * 2, step: 0.01 })
     shapeFolder.addBinding(this.params, 'deltaZ', { label: 'δz phase', min: 0, max: Math.PI * 2, step: 0.01 })
     shapeFolder.addBinding(this.params, 'A', { label: 'A  (x scale)', min: 0.1, max: 1.0, step: 0.01 })
@@ -155,7 +155,7 @@ export class LissajousMode {
     shapeFolder.addBinding(this.params, 'C', { label: 'C  (z scale)', min: 0.0, max: 1.0, step: 0.01 })
 
     // --- Animation ---
-    const animFolder = this.pane.addFolder({ title: 'Animation', expanded: true })
+    const animFolder = this.pane.addFolder({ title: 'Camera', expanded: false })
     animFolder.addBinding(this.params, 'speed', {
       label: 'speed  (rad/s)',
       min: 0.1, max: 4.0, step: 0.05,
@@ -170,6 +170,36 @@ export class LissajousMode {
         this._resetTrail()        // clear old trail so it doesn't show stale positions
       })
     }
+  }
+
+  liveEquation() {
+    const { a, b, c, delta, deltaZ, A, B, C } = this.params
+    return [
+      `$$x(t) = ${A.toFixed(2)}\\sin(${a}t + ${delta.toFixed(2)})$$`,
+      `$$y(t) = ${B.toFixed(2)}\\sin(${b}t)$$`,
+      `$$z(t) = ${C.toFixed(2)}\\sin(${c}t + ${deltaZ.toFixed(2)})$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      a: 'Horizontal oscillation count; changing it alters the x rhythm of the orbit.',
+      b: 'Vertical oscillation count; ratios with a decide whether the curve closes.',
+      c: 'Depth oscillation count; set to 0 for a flat curve.',
+      delta: 'Phase offset for x; it rotates the timing relationship between x and y.',
+      deltaZ: 'Phase offset for z; it changes how the orbit lifts through depth.',
+      A: 'Horizontal amplitude; larger values widen the figure.',
+      B: 'Vertical amplitude; larger values stretch the figure upward.',
+      C: 'Depth amplitude; larger values make the path more spatial.',
+      speed: 'Playback rate for the parameter t.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this.pane?.refresh()
+    this._resetTrail()
+    return true
   }
 
   // -------------------------------------------------------------------------

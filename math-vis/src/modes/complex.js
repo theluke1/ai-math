@@ -142,6 +142,16 @@ const FUNCTIONS = [
   },
 ]
 
+// ── Presets ────────────────────────────────────────────────────────────────
+
+const PRESETS = {
+  '1/z  (simple pole)': { exhibit: 'landscape', functionId: 'recip' },
+  'z²  (sheets)':       { exhibit: 'landscape', functionId: 'z2' },
+  'sin(z)':             { exhibit: 'landscape', functionId: 'sin' },
+  'Γ(z)  gamma':        { exhibit: 'landscape', functionId: 'gamma' },
+  'Riemann ζ approx':   { exhibit: 'landscape', functionId: 'zeta_approx' },
+}
+
 // ── Sheet definitions (multi-valued) ──────────────────────────────────────
 
 const SHEETS = [
@@ -493,8 +503,16 @@ export class ComplexMode {
       },
     }).on('change', ({ value }) => this._setExhibit(value))
 
+    // ── Presets folder ────────────────────────────────────────────────────────
+    const presetF = this.pane.addFolder({ title: 'Presets', expanded: true })
+    for (const [label, values] of Object.entries(PRESETS)) {
+      presetF.addButton({ title: label }).on('click', () => {
+        this.applyParams(values)
+      })
+    }
+
     // ── Landscape folder ──────────────────────────────────────────────────────
-    const lF = this.pane.addFolder({ title: 'Landscape', expanded: true })
+    const lF = this.pane.addFolder({ title: 'Shape', expanded: true })
     const fnOpts = {}
     FUNCTIONS.forEach(fn => { fnOpts[fn.name] = fn.id })
     lF.addBinding(this.params, 'functionId', {
@@ -508,7 +526,7 @@ export class ComplexMode {
     ])
 
     // ── Riemann folder ────────────────────────────────────────────────────────
-    const rF = this.pane.addFolder({ title: 'Riemann Sphere', expanded: false })
+    const rF = this.pane.addFolder({ title: 'Motion', expanded: false })
     rF.addBinding(this.params, 'mobiusSpeed', {
       label: 'rotation', min: 0, max: 1.0, step: 0.01,
     })
@@ -520,7 +538,7 @@ export class ComplexMode {
     ])
 
     // ── Sheets folder ─────────────────────────────────────────────────────────
-    const shF = this.pane.addFolder({ title: 'Riemann Sheets', expanded: false })
+    const shF = this.pane.addFolder({ title: 'Camera', expanded: false })
     const shOpts = {}
     SHEETS.forEach(sh => { shOpts[sh.name] = sh.id })
     shF.addBinding(this.params, 'sheetId', {
@@ -534,6 +552,40 @@ export class ComplexMode {
     ])
 
     animatePanel(this.pane)
+  }
+
+  liveEquation() {
+    const fn = FUNCTIONS.find(f => f.id === this.params.functionId)
+    const sh = SHEETS.find(s => s.id === this.params.sheetId)
+    if (this.params.exhibit === 'riemann') {
+      return `$$\\pi:S^2\\setminus\\{N\\}\\to\\mathbb{C},\\quad \\text{stereographic projection},\\quad \\omega=${this.params.mobiusSpeed.toFixed(2)}$$`
+    }
+    if (this.params.exhibit === 'sheets') {
+      return `$$w = \\text{${sh?.name ?? this.params.sheetId}},\\quad \\text{multi-valued branches over }\\mathbb{C}$$`
+    }
+    return [
+      `$$f(z)=\\text{${fn?.name ?? this.params.functionId}}$$`,
+      `$$\\text{height}=|f(z)|,\\quad \\text{color}=\\arg(f(z))$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      exhibit: 'Choose landscape, Riemann sphere, or branch sheet view.',
+      f: 'Complex function used for the landscape.',
+      rotation: 'Rotation speed for the Riemann sphere.',
+      function: 'Multi-valued function whose branches form the sheets.',
+      presets: 'Load common complex functions and singularity examples.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this._setExhibit(this.params.exhibit)
+    if (params.functionId) this._setFunction(params.functionId)
+    if (params.sheetId) this._setSheet(params.sheetId)
+    this.pane?.refresh()
+    return true
   }
 
   // ── Update ────────────────────────────────────────────────────────────────

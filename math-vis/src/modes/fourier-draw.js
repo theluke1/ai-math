@@ -149,20 +149,52 @@ export class FourierDrawMode {
     })
     animatePanel(this.pane)
 
-    this.pane.addBinding(this.params, 'terms', {
+    const shapeFolder = this.pane.addFolder({ title: 'Shape', expanded: true })
+    shapeFolder.addBinding(this.params, 'terms', {
       label: 'terms  N',
       min: 1,
       max: MAX_TERMS,
       step: 1,
     })
-    this.pane.addBinding(this.params, 'speed', { label: 'speed', min: 0.05, max: 1.5, step: 0.05 })
-    this.pane.addBinding(this.params, 'showEpicycles', { label: 'epicycles' })
+    const motionFolder = this.pane.addFolder({ title: 'Motion', expanded: true })
+    motionFolder.addBinding(this.params, 'speed', { label: 'speed', min: 0.05, max: 1.5, step: 0.05 })
+    const colorFolder = this.pane.addFolder({ title: 'Color', expanded: true })
+    colorFolder.addBinding(this.params, 'showEpicycles', { label: 'epicycles' })
 
     const presets = this.pane.addFolder({ title: 'Presets', expanded: true })
     for (const name of ['circle', 'figure-8', 'heart', 'star']) {
       presets.addButton({ title: name }).on('click', () => this._loadPreset(name))
     }
     presets.addButton({ title: 'series mode' }).on('click', () => this._onSwitch?.())
+  }
+
+  liveEquation() {
+    const { terms, speed, showEpicycles } = this.params
+    return [
+      `$$z(t) = \\sum_{k=-${terms}}^{${terms}} c_k e^{i k t}$$`,
+      `$$\\text{terms} = ${terms},\\quad \\text{speed} = ${speed.toFixed(2)},\\quad \\text{epicycles} = ${showEpicycles ? 'on' : 'off'}$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      terms: 'Number of Fourier coefficients used to reconstruct the path.',
+      speed: 'How quickly the reconstructed path is replayed.',
+      epicycles: 'Show or hide the rotating circles that sum to the curve.',
+      circle: 'Load a circular source path.',
+      figure: 'Load a figure-eight source path.',
+      heart: 'Load a heart-shaped source path.',
+      star: 'Load a star-shaped source path.',
+      series: 'Return to the waveform series view.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this.pane?.refresh()
+    this._time = 0
+    this._clearTrace()
+    return true
   }
 
   _bindPointer() {

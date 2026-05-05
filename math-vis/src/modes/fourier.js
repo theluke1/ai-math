@@ -65,6 +65,18 @@ function fourierCoeff(waveform, n) {
 }
 
 // ---------------------------------------------------------------------------
+// Presets
+// ---------------------------------------------------------------------------
+
+const PRESETS = {
+  'Harmonic Series':      { waveform: 'sine',     harmonics: 1,  speed: 0.55 },
+  'Pulse Decomposition':  { waveform: 'sawtooth', harmonics: 12, speed: 0.42 },
+  'Square Wave Zoom':     { waveform: 'square',   harmonics: 7,  speed: 0.35 },
+  'Triangle Smoothing':   { waveform: 'triangle', harmonics: 9,  speed: 0.50 },
+  'Fast Sawtooth Stack':  { waveform: 'sawtooth', harmonics: 16, speed: 0.78 },
+}
+
+// ---------------------------------------------------------------------------
 // Mode
 // ---------------------------------------------------------------------------
 
@@ -227,15 +239,17 @@ class FourierSeriesMode {
     })
     animatePanel(this.pane)
 
-    this.pane.addBinding(this.params, 'harmonics', {
+    const shapeFolder = this.pane.addFolder({ title: 'Shape', expanded: true })
+    shapeFolder.addBinding(this.params, 'harmonics', {
       label: 'harmonics  N', min: 1, max: MAX_HARMONICS, step: 1,
     }).on('change', () => this._reset())
 
-    this.pane.addBinding(this.params, 'speed', {
+    const motionFolder = this.pane.addFolder({ title: 'Motion', expanded: true })
+    motionFolder.addBinding(this.params, 'speed', {
       label: 'speed', min: 0.05, max: 2.0, step: 0.05,
     })
 
-    const wf = this.pane.addFolder({ title: 'Waveform', expanded: true })
+    const wf = this.pane.addFolder({ title: 'Color', expanded: true })
     for (const name of ['square', 'sawtooth', 'triangle', 'sine']) {
       wf.addButton({ title: name }).on('click', () => {
         this.params.waveform = name
@@ -243,8 +257,45 @@ class FourierSeriesMode {
       })
     }
 
+    const presetFolder = this.pane.addFolder({ title: 'Presets', expanded: true })
+    for (const [label, values] of Object.entries(PRESETS)) {
+      presetFolder.addButton({ title: label }).on('click', () => {
+        Object.assign(this.params, values)
+        this._reset()
+        this.pane.refresh()
+      })
+    }
+
     const lab = this.pane.addFolder({ title: 'Fourier Lab', expanded: true })
     lab.addButton({ title: 'drawing mode' }).on('click', () => this._onSwitch?.('draw'))
+  }
+
+  liveEquation() {
+    const { waveform, harmonics, speed } = this.params
+    return [
+      `$$f(t) = \\sum_{n=1}^{${harmonics}} A_n\\sin(n\\omega t + \\phi_n)$$`,
+      `$$\\text{waveform} = \\text{${waveform}},\\quad \\text{speed} = ${speed.toFixed(2)}$$`,
+    ].join('\n')
+  }
+
+  tooltips() {
+    return {
+      harmonics: 'Number of rotating terms; more terms capture sharper signal detail.',
+      speed: 'Rotation speed for the phasor chain.',
+      square: 'Odd harmonics approximate a square wave with sharp jumps.',
+      sawtooth: 'Every harmonic contributes, producing an asymmetric ramp.',
+      triangle: 'Odd harmonics fade quickly, so the wave smooths out fast.',
+      sine: 'Only the fundamental harmonic remains.',
+      presets: 'Load a named signal configuration.',
+      drawing: 'Switch to path reconstruction from drawn samples.',
+    }
+  }
+
+  applyParams(params = {}) {
+    Object.assign(this.params, params)
+    this.pane?.refresh()
+    this._reset()
+    return true
   }
 
   // -------------------------------------------------------------------------
@@ -429,5 +480,17 @@ export class FourierMode {
 
   equationContext() {
     return this._current?.equationContext?.() ?? null
+  }
+
+  liveEquation() {
+    return this._current?.liveEquation?.() ?? '$f(t) = \\sum A_n e^{in\\omega t}$'
+  }
+
+  tooltips() {
+    return this._current?.tooltips?.() ?? {}
+  }
+
+  applyParams(params = {}) {
+    return this._current?.applyParams?.(params) ?? false
   }
 }

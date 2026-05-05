@@ -521,10 +521,11 @@ Rules:
   }
 
   async _respond(question, { target = this._response, requestKind = 'ask' } = {}) {
-    const ctx = this._getCtx()
+    const intent = requestKind === 'ask' ? classifyIntent(question) : requestKind
+    const ctx = this._getCtx({ question, requestKind, intent })
     this._lastDemoReason = ''
     try {
-      const handled = await this._respondFromWorker(question, ctx, { target, requestKind })
+      const handled = await this._respondFromWorker(question, ctx, { target, requestKind, intent })
       if (handled) return
     } catch (err) {
       console.info('[AI] Worker unavailable; using local demo response.', err)
@@ -609,7 +610,30 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
     }
   }
 
-  async _respondFromWorker(question, ctx, { target = this._response, requestKind = 'ask' } = {}) {
+  _workerPayload(question, ctx, requestKind, intent) {
+    const payload = {
+      question,
+      mode: ctx.mode,
+      equation: ctx.equation,
+      params: ctx.params,
+      requestKind,
+      intent,
+    }
+
+    if (ctx.extra) payload.extra = ctx.extra
+    if (ctx.schema) payload.schema = ctx.schema
+    if (ctx.lessonContext && (requestKind !== 'ask' || intent === 'explain')) {
+      payload.lessonContext = ctx.lessonContext
+    }
+    if (requestKind === 'ask') {
+      payload.responseLimit = intent === 'params' || intent === 'equation' ? 180 : 260
+    } else {
+      payload.responseLimit = requestKind === 'lesson' ? 620 : 420
+    }
+    return payload
+  }
+
+  async _respondFromWorker(question, ctx, { target = this._response, requestKind = 'ask', intent = 'explain' } = {}) {
     this._streaming = true
     this._label.classList.add('streaming')
     let thinking = this._showThinking(target, requestKind)
@@ -619,16 +643,7 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
       response = await fetch(this._aiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          mode: ctx.mode,
-          equation: ctx.equation,
-          params: ctx.params,
-          extra: ctx.extra,
-          schema: ctx.schema,
-          lessonContext: ctx.lessonContext,
-          requestKind,
-        }),
+        body: JSON.stringify(this._workerPayload(question, ctx, requestKind, intent)),
       })
     } catch (err) {
       thinking?.remove()
