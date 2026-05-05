@@ -23,6 +23,7 @@ import * as THREE from 'three'
 import { gsap }         from 'gsap'
 import { Pane }         from 'tweakpane'
 import { animatePanel } from '../core/ui.js'
+import { FourierDrawMode } from './fourier-draw.js'
 
 const CAM_Z        = 3.2
 const MAX_HARMONICS = 16
@@ -67,11 +68,12 @@ function fourierCoeff(waveform, n) {
 // Mode
 // ---------------------------------------------------------------------------
 
-export class FourierMode {
-  constructor(scene, renderer) {
+class FourierSeriesMode {
+  constructor(scene, renderer, options = {}) {
     this.scene    = scene
     this.renderer = renderer
     this.t        = 0
+    this._onSwitch = options.onSwitch ?? null
 
     this.params = {
       harmonics: 7,
@@ -240,6 +242,9 @@ export class FourierMode {
         this._reset()
       })
     }
+
+    const lab = this.pane.addFolder({ title: 'Fourier Lab', expanded: true })
+    lab.addButton({ title: 'drawing mode' }).on('click', () => this._onSwitch?.('draw'))
   }
 
   // -------------------------------------------------------------------------
@@ -330,6 +335,24 @@ export class FourierMode {
     this._waveformLine.geometry.attributes.position.needsUpdate = true
   }
 
+  equationContext() {
+    return {
+      title: 'Fourier Series',
+      equation: 'f(t) = Σ Aₙ sin(nωt + φₙ)',
+      equationHtml: [
+        '<span class="math-var">f</span>(<span class="math-var">t</span>) = ',
+        '<span class="math-sum"><span class="math-sum__top">N</span><span class="math-sum__symbol">∑</span><span class="math-sum__bottom">n = 1</span></span>',
+        '<span class="math-var">A</span><sub>n</sub> sin(<span class="math-var">n</span>ω<span class="math-var">t</span> + φ<sub>n</sub>)',
+      ].join(''),
+      rows: [
+        ['waveform', this.params.waveform],
+        ['harmonics', `${this.params.harmonics}`],
+        ['speed', `${this.params.speed.toFixed(2)}`],
+        ['principle', 'higher harmonics refine the shape'],
+      ],
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Dispose
   // -------------------------------------------------------------------------
@@ -362,5 +385,49 @@ export class FourierMode {
     this._divider.geometry.dispose()
     this._divider.material.dispose()
     this.pane.dispose()
+  }
+}
+
+export class FourierMode {
+  constructor(scene, renderer) {
+    this.scene = scene
+    this.renderer = renderer
+    this._variant = null
+    this._current = null
+    this._mount('series')
+  }
+
+  _mount(variant) {
+    this._current?.dispose()
+    this._variant = variant
+    this._current = variant === 'draw'
+      ? new FourierDrawMode(this.scene, this.renderer, { onSwitch: () => this._mount('series') })
+      : new FourierSeriesMode(this.scene, this.renderer, { onSwitch: () => this._mount('draw') })
+
+    this.pane = this._current.pane
+    this.params = this._current.params
+    window.dispatchEvent(new CustomEvent('mathvis:mode-pane-changed', {
+      detail: { showControls: true },
+    }))
+  }
+
+  update(dt) {
+    this._current?.update(dt)
+  }
+
+  dispose() {
+    this._current?.dispose()
+    this._current = null
+  }
+
+  aiContext() {
+    return {
+      variant: this._variant === 'draw' ? 'drawing' : 'series',
+      params: { ...(this.params ?? {}) },
+    }
+  }
+
+  equationContext() {
+    return this._current?.equationContext?.() ?? null
   }
 }

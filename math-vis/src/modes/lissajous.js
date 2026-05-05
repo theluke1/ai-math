@@ -23,9 +23,8 @@
  *   The geometry is updated in-place each frame (no allocations in the loop).
  *
  * Rendering:
- *   THREE.Line with ShaderMaterial + AdditiveBlending. Additive blending means
- *   where the trail crosses itself the colours sum and get brighter — this is
- *   the phosphor/oscilloscope effect.
+ *   THREE.Line with ShaderMaterial. Normal alpha blending keeps the thin WebGL
+ *   line more stable while orbiting the camera than additive overbright trails.
  */
 
 import * as THREE from 'three'
@@ -121,8 +120,7 @@ export class LissajousMode {
       transparent:  true,
       depthTest:    false,
       depthWrite:   false,
-      // Additive: overlapping parts of the trail add together and get brighter
-      blending:     THREE.AdditiveBlending,
+      blending:     THREE.NormalBlending,
     })
 
     this.mesh = new THREE.Line(this.geometry, this.material)
@@ -226,6 +224,44 @@ export class LissajousMode {
     this.t = 0
     this._initBuffers()
     this.geometry.attributes.position.needsUpdate = true
+  }
+
+  aiContext() {
+    const { a, b, c, delta, deltaZ, A, B, C, speed } = this.params
+    return {
+      mode: 'lissajous',
+      exhibit: C === 0 || c === 0 ? '2D Lissajous curve' : '3D Lissajous orbit',
+      equations: [
+        'x(t) = A sin(a t + delta)',
+        'y(t) = B sin(b t)',
+        'z(t) = C sin(c t + deltaZ)',
+      ],
+      params: { a, b, c, delta, deltaZ, A, B, C, speed },
+      interpretation: {
+        frequencyRatio: `${a}:${b}:${c}`,
+        isFlat: C === 0 || c === 0,
+        phaseOffsets: {
+          xy: delta,
+          z: deltaZ,
+        },
+      },
+    }
+  }
+
+  aiSchema() {
+    return {
+      params: {
+        a: { min: 1, max: 12 },
+        b: { min: 1, max: 12 },
+        c: { min: 0, max: 12 },
+        delta: { min: 0, max: Math.PI * 2 },
+        deltaZ: { min: 0, max: Math.PI * 2 },
+        A: { min: 0.1, max: 1 },
+        B: { min: 0.1, max: 1 },
+        C: { min: 0, max: 1 },
+        speed: { min: 0.05, max: 2 },
+      },
+    }
   }
 
   /** Call when switching away from this mode — cleans up scene and UI */

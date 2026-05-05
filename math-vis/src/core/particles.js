@@ -83,6 +83,7 @@ export class BackgroundParticles {
   constructor(scene) {
     this.scene   = scene
     this._t      = 0
+    this.visible = true
 
     this._pos    = new Float32Array(N_TOTAL * 3)
     this._alpha  = new Float32Array(N_TOTAL)
@@ -135,6 +136,7 @@ export class BackgroundParticles {
   }
 
   update(dt, cursorNDC) {
+    if (!this.visible) return
     this._t += dt
 
     const cx = cursorNDC.x * BOUNDS
@@ -173,6 +175,7 @@ export class BackgroundParticles {
   }
 
   setVisible(v) {
+    this.visible = v
     this._pointsBlue.visible  = v
     this._pointsAmber.visible = v
   }

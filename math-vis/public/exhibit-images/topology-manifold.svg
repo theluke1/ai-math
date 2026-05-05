@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#090d16"/>
+  <defs>
+    <filter id="pointGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(155 68)">
+    <path d="M130 435L520 540L910 390L510 290Z" fill="none" stroke="#f5f4eb" stroke-opacity=".28"/>
+    <path d="M130 185L520 290L910 140L510 40Z" fill="none" stroke="#f5f4eb" stroke-opacity=".18"/>
+    <path d="M130 185V435M520 290V540M910 140V390M510 40V290" fill="none" stroke="#f5f4eb" stroke-opacity=".20"/>
+    <g stroke="#f5f4eb" stroke-opacity=".10">
+      <path d="M208 456L598 306M286 477L676 327M364 498L754 348M442 519L832 369"/>
+      <path d="M208 206L598 56M286 227L676 77M364 248L754 98M442 269L832 119"/>
+      <path d="M208 206V456M286 227V477M364 248V498M442 269V519M598 56V306M676 77V327M754 98V348M832 119V369"/>
+    </g>
+    <g stroke-width="2" fill="none">
+      <path d="M520 540L978 365" stroke="#36a9ff"/>
+      <path d="M520 540L118 433" stroke="#28f0d2"/>
+      <path d="M520 540V86" stroke="#e8c547"/>
+    </g>
+    <g font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#f5f4eb" fill-opacity=".78">
+      <text x="984" y="363">x</text>
+      <text x="96" y="431">y</text>
+      <text x="531" y="82">z</text>
+    </g>
+    <g filter="url(#pointGlow)">
+      <g fill="#36a9ff">
+        <circle cx="260" cy="375" r="5"/><circle cx="292" cy="340" r="4"/><circle cx="326" cy="310" r="5"/><circle cx="368" cy="290" r="4"/><circle cx="408" cy="284" r="5"/><circle cx="452" cy="292" r="4"/><circle cx="492" cy="314" r="5"/><circle cx="536" cy="346" r="4"/><circle cx="582" cy="376" r="5"/><circle cx="632" cy="392" r="4"/><circle cx="682" cy="382" r="5"/><circle cx="724" cy="350" r="4"/><circle cx="746" cy="306" r="5"/><circle cx="732" cy="264" r="4"/><circle cx="688" cy="238" r="5"/><circle cx="626" cy="230" r="4"/><circle cx="560" cy="240" r="5"/><circle cx="498" cy="264" r="4"/>
+      </g>
+      <g fill="#28f0d2" opacity=".88">
+        <circle cx="312" cy="414" r="4"/><circle cx="354" cy="392" r="4"/><circle cx="402" cy="374" r="4"/><circle cx="452" cy="362" r="4"/><circle cx="504" cy="358" r="4"/><circle cx="558" cy="364" r="4"/><circle cx="606" cy="382" r="4"/><circle cx="646" cy="414" r="4"/><circle cx="665" cy="454" r="4"/><circle cx="636" cy="486" r="4"/><circle cx="572" cy="492" r="4"/><circle cx="510" cy="468" r="4"/><circle cx="454" cy="432" r="4"/><circle cx="392" cy="414" r="4"/>
+      </g>
+      <g fill="#e8c547" opacity=".86">
+        <circle cx="426" cy="246" r="3.5"/><circle cx="468" cy="218" r="3.5"/><circle cx="520" cy="202" r="3.5"/><circle cx="578" cy="198" r="3.5"/><circle cx="632" cy="212" r="3.5"/><circle cx="676" cy="244" r="3.5"/><circle cx="696" cy="290" r="3.5"/><circle cx="684" cy="338" r="3.5"/><circle cx="638" cy="364" r="3.5"/><circle cx="578" cy="356" r="3.5"/><circle cx="524" cy="326" r="3.5"/><circle cx="472" cy="294" r="3.5"/>
+      </g>
+    </g>
+    <path d="M248 386 C350 250 485 218 620 244 C743 267 780 341 686 394 C586 451 407 439 300 388" fill="none" stroke="#f5f4eb" stroke-opacity=".38" stroke-width="2"/>
+    <path d="M308 420 C420 348 544 344 648 398 C722 436 700 488 594 493 C488 499 378 466 308 420Z" fill="none" stroke="#a8c9c8" stroke-opacity=".42" stroke-width="2"/>
+  </g>
+  <g fill="#f5f4eb" font-family="Arial, Helvetica, sans-serif">
+    <text x="84" y="44" font-size="19" opacity=".75">Topology cloud · sampled data manifold in R³</text>
+    <text x="84" y="672" font-size="15" opacity=".52">Irregular point clusters projected inside a coordinate volume</text>
+  </g>
+</svg>

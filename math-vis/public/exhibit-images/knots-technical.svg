@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <defs>
+    <linearGradient id="tube" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f4eb"/>
+      <stop offset=".45" stop-color="#36a9ff"/>
+      <stop offset="1" stop-color="#e8c547"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="700" fill="#0a0e18"/>
+  <g transform="translate(110 60)">
+    <rect width="980" height="560" fill="#111724" stroke="#f5f4eb" stroke-opacity=".16"/>
+    <g stroke="#f5f4eb" stroke-opacity=".08">
+      <path d="M98 0V560M196 0V560M294 0V560M392 0V560M490 0V560M588 0V560M686 0V560M784 0V560M882 0V560"/>
+      <path d="M0 70H980M0 140H980M0 210H980M0 280H980M0 350H980M0 420H980M0 490H980"/>
+    </g>
+    <g fill="none" stroke="url(#tube)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+      <path d="M206 291 C174 153 318 81 453 170 C578 253 649 410 806 344 C912 299 870 144 735 147 C566 152 475 391 318 413 C201 430 149 335 206 291Z"/>
+    </g>
+    <g fill="none" stroke="#050913" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".78">
+      <path d="M466 178 C531 223 581 296 638 334"/>
+      <path d="M321 411 C388 401 438 355 482 299"/>
+    </g>
+    <g fill="none" stroke="#f5f4eb" stroke-opacity=".54" stroke-width="1.6">
+      <path d="M206 291 C174 153 318 81 453 170 C578 253 649 410 806 344 C912 299 870 144 735 147 C566 152 475 391 318 413 C201 430 149 335 206 291Z"/>
+    </g>
+    <g fill="#f5f4eb" font-family="Arial, Helvetica, sans-serif" font-size="15" opacity=".7">
+      <text x="72" y="518">arc length s</text>
+      <text x="748" y="104">curvature κ</text>
+      <text x="814" y="382">torsion τ</text>
+    </g>
+  </g>
+  <g fill="#f5f4eb" font-family="Arial, Helvetica, sans-serif">
+    <text x="110" y="38" font-size="18" opacity=".78">Torus knot T(p,q) · closed space curve with tube geometry</text>
+    <text x="110" y="662" font-size="15" opacity=".52">Color encodes curvature/torsion along the knot path</text>
+  </g>
+</svg>

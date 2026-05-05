@@ -229,7 +229,7 @@ export class Renderer {
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true,
     })
-    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.webgl.setSize(window.innerWidth, window.innerHeight)
     this.webgl.toneMapping         = THREE.ACESFilmicToneMapping
     this.webgl.toneMappingExposure = 1.0
@@ -240,6 +240,8 @@ export class Renderer {
     this.controls.dampingFactor   = 0.06
     this.controls.autoRotate      = true
     this.controls.autoRotateSpeed = 0.6
+    this.controls.minDistance     = 1.0   // can't clip inside the scene
+    this.controls.maxDistance     = 7.0   // can't zoom past the simulation bounds
 
     let _resumeTimer = null
     this.controls.addEventListener('start', () => {
@@ -265,7 +267,7 @@ export class Renderer {
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.0, 0.5, 0.2
+      0.45, 0.32, 0.55
     )
     this.composer.addPass(this.bloomPass)
 
@@ -283,6 +285,7 @@ export class Renderer {
 
     // Ripple — click-triggered radial UV distortion
     this.ripplePass = new ShaderPass(RippleShader)
+    this.ripplePass.enabled = false
     this.composer.addPass(this.ripplePass)
 
     // Film grain — last layer, applied to the final pixel
@@ -333,6 +336,7 @@ export class Renderer {
       1 - clientY / window.innerHeight,   // flip Y for WebGL UV
     )
     this._rippleTime = 0
+    this.ripplePass.enabled = true
   }
 
   _onResize() {
@@ -389,6 +393,7 @@ export class Renderer {
       if (this._rippleTime > 1.5) {
         this._rippleTime = -1
         this.ripplePass.uniforms.uRippleTime.value = -1
+        this.ripplePass.enabled = false
       }
     }
 

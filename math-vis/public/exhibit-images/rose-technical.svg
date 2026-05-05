@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#fbfbfb"/>
+  <g transform="translate(92 64)">
+    <rect x="0" y="0" width="1010" height="560" fill="#fff" stroke="#111" stroke-opacity=".22"/>
+    <g stroke="#a9a9a9" stroke-width="1">
+      <path d="M0 280H1010M505 0V560" stroke="#808080" stroke-width="1.7"/>
+      <path d="M101 0V560M202 0V560M303 0V560M404 0V560M606 0V560M707 0V560M808 0V560M909 0V560" opacity=".55"/>
+      <path d="M0 56H1010M0 112H1010M0 168H1010M0 224H1010M0 336H1010M0 392H1010M0 448H1010M0 504H1010" opacity=".45"/>
+    </g>
+    <g stroke="#777" stroke-width="1">
+      <path d="M101 273v14M202 273v14M303 273v14M404 273v14M606 273v14M707 273v14M808 273v14M909 273v14"/>
+      <path d="M498 56h14M498 112h14M498 168h14M498 224h14M498 336h14M498 392h14M498 448h14M498 504h14"/>
+    </g>
+    <g fill="#555" font-family="Arial, Helvetica, sans-serif" font-size="18">
+      <text x="982" y="304">x</text>
+      <text x="520" y="24">y</text>
+      <text x="383" y="305">-0.5</text>
+      <text x="594" y="305">0.5</text>
+      <text x="511" y="171">0.5</text>
+      <text x="515" y="397">-0.5</text>
+    </g>
+    <g fill="none" stroke="#001de0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M505 280 C447 199 349 182 248 236 C136 296 48 292 16 239 C58 312 145 365 260 341 C370 318 448 360 505 280 C563 199 661 182 762 236 C874 296 962 292 994 239 C952 312 865 365 750 341 C640 318 562 360 505 280Z"/>
+      <path opacity=".78" d="M505 280 C457 205 374 184 288 221 C185 264 99 268 46 234 C101 302 195 331 299 315 C394 300 457 345 505 280 C553 205 636 184 722 221 C825 264 911 268 964 234 C909 302 815 331 711 315 C616 300 553 345 505 280Z"/>
+      <path opacity=".72" d="M505 280 C463 169 538 91 625 64 C714 36 780 77 760 159 C737 255 617 283 505 280 C393 283 273 255 250 159 C230 77 296 36 385 64 C472 91 547 169 505 280Z"/>
+      <path opacity=".72" d="M505 280 C463 391 538 469 625 496 C714 524 780 483 760 401 C737 305 617 277 505 280 C393 277 273 305 250 401 C230 483 296 524 385 496 C472 469 547 391 505 280Z"/>
+      <path opacity=".60" d="M505 280 C421 239 403 154 437 79 C384 144 386 223 505 280 C624 223 626 144 573 79 C607 154 589 239 505 280Z"/>
+      <path opacity=".60" d="M505 280 C421 321 403 406 437 481 C384 416 386 337 505 280 C624 337 626 416 573 481 C607 406 589 321 505 280Z"/>
+    </g>
+  </g>
+  <g fill="#222" font-family="Arial, Helvetica, sans-serif">
+    <text x="95" y="36" font-size="18">Rose curve · r = sin(kθ), k = 3</text>
+    <text x="92" y="658" font-size="16" opacity=".72">Polar trace with reference axes, grid, and parameter sweep overlays</text>
+  </g>
+</svg>

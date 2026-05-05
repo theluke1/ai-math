@@ -34,6 +34,7 @@ import { animatePanel } from '../core/ui.js'
 const TRAIL_LENGTH  = 6000    // points in the main trail
 const STEPS_PER_FRAME = 8    // RK4 sub-steps per animation frame
 const DT_INTEGRATION = 0.005  // fixed integration step (seconds of attractor time)
+const DEFAULT_BURN_IN = 700   // settle onto attractor before live tracing
 
 // ---------------------------------------------------------------------------
 // Attractor library
@@ -45,6 +46,9 @@ const ATTRACTORS = {
     params: { σ: 10, ρ: 28, β: 2.667 },
     init:   [0.1, 0, 0],
     scale:  0.038,
+    burnIn: 900,
+    trailPower: 1.15,
+    fadeFloor: 0.08,
     equations: [
       'ẋ = σ(y − x)',
       'ẏ = x(ρ − z) − y',
@@ -63,6 +67,9 @@ const ATTRACTORS = {
     params: { a: 0.2, b: 0.2, c: 5.7 },
     init:   [0.1, 0, 0],
     scale:  0.052,
+    burnIn: 1800,
+    trailPower: 0.9,
+    fadeFloor: 0.11,
     equations: [
       'ẋ = −y − z',
       'ẏ = x + ay',
@@ -81,6 +88,9 @@ const ATTRACTORS = {
     params: { a: 1.89 },
     init:   [-1.48, -1.51, 2.04],
     scale:  0.18,
+    burnIn: 800,
+    trailPower: 0.85,
+    fadeFloor: 0.12,
     equations: [
       'ẋ = −ax − 4y − 4z − y²',
       'ẏ = −ay − 4z − 4x − z²',
@@ -100,6 +110,10 @@ const ATTRACTORS = {
     params: { b: 0.19 },
     init:   [0.1, 0, 0],
     scale:  0.28,
+    burnIn: 2200,
+    trailPower: 0.45,
+    fadeFloor: 0.18,
+    alpha: 0.95,
     equations: [
       'ẋ = sin(y) − bx',
       'ẏ = sin(z) − by',
@@ -118,6 +132,9 @@ const ATTRACTORS = {
     params: { a: 35, b: 3, c: 28 },
     init:   [-0.1, 0.5, 0.6],
     scale:  0.030,
+    burnIn: 900,
+    trailPower: 1.1,
+    fadeFloor: 0.08,
     equations: [
       'ẋ = a(y − x)',
       'ẏ = (c−a)x − xz + cy',
@@ -136,6 +153,9 @@ const ATTRACTORS = {
     params: { a: 0.95, b: 0.7, c: 0.6, d: 3.5, e: 0.25, f: 0.1 },
     init:   [0.1, 0, 0],
     scale:  0.60,
+    burnIn: 1600,
+    trailPower: 0.65,
+    fadeFloor: 0.14,
     equations: [
       'ẋ = (z−b)x − dy',
       'ẏ = dx + (z−b)y',
@@ -156,6 +176,9 @@ const ATTRACTORS = {
     params: { a: 3, b: 2.7, c: 1.7, d: 2, e: 9 },
     init:   [0.1, 0.03, 0],
     scale:  0.12,
+    burnIn: 900,
+    trailPower: 0.9,
+    fadeFloor: 0.11,
     equations: [
       'ẋ = y − ax + byz',
       'ẏ = cy − xz + z',
@@ -174,6 +197,9 @@ const ATTRACTORS = {
     params: { α: 0.14, γ: 0.1 },
     init:   [-1.0, 0.0, 0.5],
     scale:  0.44,
+    burnIn: 2200,
+    trailPower: 0.55,
+    fadeFloor: 0.16,
     equations: [
       'ẋ = y(z − 1 + x²) + γx',
       'ẏ = x(3z + 1 − x²) + γy',
@@ -193,6 +219,9 @@ const ATTRACTORS = {
     params: { a: 0.95, b: 7.91, F: 4.83, G: 4.66 },
     init:   [-0.2, -0.5, 0.3],
     scale:  0.14,
+    burnIn: 1500,
+    trailPower: 0.8,
+    fadeFloor: 0.12,
     equations: [
       'ẋ = −ax − y² − z² + aF',
       'ẏ = −y + xy − bxz + G',
@@ -212,6 +241,9 @@ const ATTRACTORS = {
     params: {},
     init:   [0.6, 0.6, 0.6],
     scale:  0.50,
+    burnIn: 1200,
+    trailPower: 0.7,
+    fadeFloor: 0.14,
     equations: [
       'ẋ = yz',
       'ẏ = x − y',
@@ -229,6 +261,9 @@ const ATTRACTORS = {
     params: { s: 10, b: 4.272 },
     init:   [0.1, 0, 0],
     scale:  0.065,
+    burnIn: 1400,
+    trailPower: 0.95,
+    fadeFloor: 0.1,
     equations: [
       'ẋ = −s(x + y)',
       'ẏ = −y − sxz',
@@ -297,17 +332,19 @@ const chaosVert = /* glsl */`
   }
 `
 const chaosFrag = /* glsl */`
+  uniform float uFadeFloor;
+  uniform float uAlpha;
   varying float fVelocity;
   varying float fAge;
   void main() {
-    float fade = pow(fAge, 0.85);
+    float fade = max(pow(fAge, 0.82), uFadeFloor);
     vec3 slow  = vec3(0.02, 0.08, 0.55);
     vec3 mid   = vec3(0.00, 0.75, 1.00);
-    vec3 fast  = vec3(1.40, 1.40, 1.50);
+    vec3 fast  = vec3(0.95, 0.98, 1.00);
     vec3 colour = fVelocity < 0.5
       ? mix(slow, mid,  fVelocity * 2.0)
       : mix(mid,  fast, (fVelocity - 0.5) * 2.0);
-    gl_FragColor = vec4(colour, fade * 0.88);
+    gl_FragColor = vec4(colour, fade * uAlpha);
   }
 `
 
@@ -323,7 +360,7 @@ const shadowVert = /* glsl */`
 const shadowFrag = /* glsl */`
   varying float fAge;
   void main() {
-    gl_FragColor = vec4(1.0, 0.55, 0.05, pow(fAge, 1.2) * 0.50);
+    gl_FragColor = vec4(1.0, 0.55, 0.05, max(pow(fAge, 1.05), 0.08) * 0.50);
   }
 `
 
@@ -363,6 +400,7 @@ export class ChaosMode {
       speed:       1.0,
     }
 
+    this._burnInState()
     this._initBuffers()
     this._buildMesh()
     this._buildShadowMesh()
@@ -375,21 +413,50 @@ export class ChaosMode {
   // -------------------------------------------------------------------------
 
   _initBuffers() {
-    const init = this._attractor.init
+    const init = this._state ?? this._attractor.init
+    const shadowInit = this._shadowState ?? init
     const sc   = this._attractor.scale
+    const agePower = this._attractor.trailPower ?? 1.5
     for (let i = 0; i < TRAIL_LENGTH; i++) {
       this._positions[i * 3]     = init[0] * sc
       this._positions[i * 3 + 1] = init[1] * sc
       this._positions[i * 3 + 2] = init[2] * sc
-      this._ages[i]       = Math.pow(1 - i / (TRAIL_LENGTH - 1), 1.5)
+      this._ages[i]       = Math.pow(1 - i / (TRAIL_LENGTH - 1), agePower)
       this._velocities[i] = 0
     }
     const sl = this._SHADOW_LEN
+    const shadowAgePower = Math.max(0.75, agePower)
     for (let i = 0; i < sl; i++) {
-      this._shadowPos[i * 3]     = init[0] * sc
-      this._shadowPos[i * 3 + 1] = init[1] * sc
-      this._shadowPos[i * 3 + 2] = init[2] * sc
-      this._shadowAges[i] = Math.pow(1 - i / (sl - 1), 1.5)
+      this._shadowPos[i * 3]     = shadowInit[0] * sc
+      this._shadowPos[i * 3 + 1] = shadowInit[1] * sc
+      this._shadowPos[i * 3 + 2] = shadowInit[2] * sc
+      this._shadowAges[i] = Math.pow(1 - i / (sl - 1), shadowAgePower)
+    }
+  }
+
+  _burnInState() {
+    const att = this._attractor
+    for (let i = 0; i < (att.burnIn ?? DEFAULT_BURN_IN); i++) {
+      rk4Step(this._state, DT_INTEGRATION, att)
+      rk4Step(this._shadowState, DT_INTEGRATION, att)
+    }
+  }
+
+  _updateTrailStyle() {
+    if (!this.material?.uniforms) return
+    this.material.uniforms.uFadeFloor.value = this._attractor.fadeFloor ?? 0.08
+    this.material.uniforms.uAlpha.value = this._attractor.alpha ?? 0.88
+  }
+
+  _markTrailDirty() {
+    if (this.geometry) {
+      this.geometry.attributes.position.needsUpdate = true
+      this.geometry.attributes.age.needsUpdate = true
+      this.geometry.attributes.vVelocity.needsUpdate = true
+    }
+    if (this.shadowGeometry) {
+      this.shadowGeometry.attributes.position.needsUpdate = true
+      this.shadowGeometry.attributes.age.needsUpdate = true
     }
   }
 
@@ -408,10 +475,14 @@ export class ChaosMode {
     this.material = new THREE.ShaderMaterial({
       vertexShader:   chaosVert,
       fragmentShader: chaosFrag,
+      uniforms: {
+        uFadeFloor: { value: this._attractor.fadeFloor ?? 0.08 },
+        uAlpha:     { value: this._attractor.alpha ?? 0.88 },
+      },
       transparent: true,
       depthTest:   false,
       depthWrite:  false,
-      blending:    THREE.AdditiveBlending,
+      blending:    THREE.NormalBlending,
     })
 
     this.mesh = new THREE.Line(this.geometry, this.material)
@@ -431,11 +502,14 @@ export class ChaosMode {
     this.shadowMaterial = new THREE.ShaderMaterial({
       vertexShader:   chaosVert,
       fragmentShader: chaosFrag,
-      uniforms: {},
+      uniforms: {
+        uFadeFloor: { value: this._attractor.fadeFloor ?? 0.08 },
+        uAlpha:     { value: this._attractor.alpha ?? 0.88 },
+      },
       transparent: true,
       depthTest:   false,
       depthWrite:  false,
-      blending:    THREE.AdditiveBlending,
+      blending:    THREE.NormalBlending,
     })
 
     this.shadowMesh = new THREE.Line(this.shadowGeometry, new THREE.ShaderMaterial({
@@ -444,7 +518,7 @@ export class ChaosMode {
       transparent:    true,
       depthTest:      false,
       depthWrite:     false,
-      blending:       THREE.AdditiveBlending,
+      blending:       THREE.NormalBlending,
     }))
     this.scene.add(this.shadowMesh)
   }
@@ -574,11 +648,76 @@ export class ChaosMode {
     this._state        = [...this._attractor.init]
     this._shadowState  = this._state.map((v, i) => i === 0 ? v + 0.001 : v)
     this._maxVelocity  = 1
+    this._burnInState()
     this._initBuffers()
-    this.geometry.attributes.position.needsUpdate  = true
-    this.geometry.attributes.vVelocity.needsUpdate = true
-    this.shadowGeometry.attributes.position.needsUpdate = true
+    this._updateTrailStyle()
+    this._markTrailDirty()
     this._updateEquations()
+  }
+
+  aiContext() {
+    const p = this._attractor.params
+    return {
+      attractor: this._attractor.label,
+      equations: [...this._attractor.equations],
+      attractorParams: { ...this._attractor.params },
+      axes: {
+        x: this._attractorKey === 'lorenz' ? 'convective roll / horizontal circulation state' : 'state variable x',
+        y: this._attractorKey === 'lorenz' ? 'temperature difference between rising and falling flow' : 'state variable y',
+        z: this._attractorKey === 'lorenz' ? 'vertical temperature-profile distortion' : 'state variable z',
+      },
+      integration: {
+        method: 'fourth-order Runge-Kutta',
+        dt: DT_INTEGRATION,
+        stepsPerFrame: STEPS_PER_FRAME,
+        mainTrailPoints: TRAIL_LENGTH,
+        shadowInitialOffset: 0.001,
+      },
+      chaos: {
+        shadowDistance: this.params.shadowDist,
+        showsSensitiveDependence: this.params.showShadow,
+        meaning: 'two nearly identical initial states diverge while staying confined to the same attractor',
+      },
+      params: {
+        ...this.params,
+        ...(p.σ !== undefined ? { sigma: p.σ } : {}),
+        ...(p.ρ !== undefined ? { rho: p.ρ } : {}),
+        ...(p.β !== undefined ? { beta: p.β } : {}),
+      },
+    }
+  }
+
+  aiSchema() {
+    return {
+      params: {
+        speed: { min: 0.1, max: 3.0 },
+        showShadow: { type: 'boolean' },
+        sigma: { mapsTo: 'σ', min: 1, max: 40 },
+        rho: { mapsTo: 'ρ', min: 1, max: 60 },
+        beta: { mapsTo: 'β', min: 0.5, max: 8 },
+      },
+    }
+  }
+
+  applyAiAction(action) {
+    if (action.type !== 'set_params') return false
+    const params = action.params ?? {}
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value)))
+
+    if ('speed' in params) this.params.speed = clamp(params.speed, 0.1, 3.0)
+    if ('showShadow' in params) {
+      this.params.showShadow = Boolean(params.showShadow)
+      this.shadowMesh.visible = this.params.showShadow
+    }
+
+    const attParams = this._attractor.params
+    if ('sigma' in params && 'σ' in attParams) attParams.σ = clamp(params.sigma, 1, 40)
+    if ('rho' in params && 'ρ' in attParams) attParams.ρ = clamp(params.rho, 1, 60)
+    if ('beta' in params && 'β' in attParams) attParams.β = clamp(params.beta, 0.5, 8)
+
+    this.pane.refresh()
+    this._updateEquations()
+    return true
   }
 
   // -------------------------------------------------------------------------

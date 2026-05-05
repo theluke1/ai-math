@@ -105,7 +105,7 @@ export class RoseMode {
       transparent:  true,
       depthTest:    false,
       depthWrite:   false,
-      blending:     THREE.AdditiveBlending,
+      blending:     THREE.NormalBlending,
     })
 
     this.mesh = new THREE.Line(this.geometry, this.material)
@@ -183,6 +183,53 @@ export class RoseMode {
     this.t = 0
     this._initBuffers()
     this.geometry.attributes.position.needsUpdate = true
+  }
+
+  aiContext() {
+    const k = this.params.k
+    const nearestInteger = Math.round(k)
+    const isNearInteger = Math.abs(k - nearestInteger) < 0.001
+    const flat = Math.abs(this.params.h) < 0.001 || Math.abs(this.params.n) < 0.001
+
+    return {
+      mode: 'rose',
+      exhibit: flat ? 'flat rhodonea curve' : '3D lifted rose curve',
+      equations: [
+        'r(theta) = cos(k theta)',
+        'x(theta) = r(theta) cos(theta)',
+        'y(theta) = r(theta) sin(theta)',
+        'z(theta) = h sin(n theta)',
+      ],
+      equation: {
+        polar: 'r = cos(k theta)',
+        cartesian: [
+          'x(theta) = cos(k theta) cos(theta)',
+          'y(theta) = cos(k theta) sin(theta)',
+          'z(theta) = sin(n theta) h',
+        ],
+      },
+      params: { ...this.params },
+      interpretation: {
+        kType: isNearInteger ? 'integer' : 'non-integer',
+        nearestInteger,
+        flat,
+        zMotion: flat ? 'flat 2D curve' : '3D lifted curve',
+        petalRule: isNearInteger
+          ? (nearestInteger % 2 === 0 ? 'even integer k gives 2k petals' : 'odd integer k gives k petals')
+          : 'non-integer k traces a longer path before closing, or may not close cleanly in finite time',
+      },
+    }
+  }
+
+  aiSchema() {
+    return {
+      params: {
+        k: { min: 0.5, max: 12 },
+        n: { min: 0, max: 12 },
+        h: { min: 0, max: 1 },
+        speed: { min: 0.05, max: 2 },
+      },
+    }
   }
 
   dispose() {

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <defs>
+    <g id="panelGrid">
+      <rect width="420" height="250" fill="#fff" stroke="#222" stroke-opacity=".22"/>
+      <g stroke="#bfbfbf" stroke-width="1" stroke-dasharray="3 4">
+        <path d="M70 0V250M140 0V250M210 0V250M280 0V250M350 0V250"/>
+        <path d="M0 50H420M0 100H420M0 150H420M0 200H420"/>
+      </g>
+      <g stroke="#777" stroke-width="1.4">
+        <path d="M210 0V250M0 125H420"/>
+      </g>
+    </g>
+  </defs>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#111">
+    <text x="380" y="36" font-size="18">Projected chaotic attractors</text>
+  </g>
+  <g transform="translate(390 54)">
+    <use href="#panelGrid"/>
+    <g fill="none" stroke="#001fd2" stroke-width="2" stroke-linecap="round" opacity=".95">
+      <path d="M75 134 C25 65 90 20 165 70 C245 124 221 188 145 162 C64 134 78 66 164 54 C270 39 362 102 348 162 C334 219 231 212 179 151 C126 88 167 41 260 61 C353 82 398 162 341 203 C274 251 132 215 77 134Z"/>
+      <path d="M82 130 C48 78 100 44 162 83 C231 127 218 175 154 156 C88 137 101 83 170 76 C255 67 334 115 322 158 C309 204 225 198 184 151 C142 104 181 68 253 81 C325 94 362 158 316 190 C260 228 127 202 82 130Z"/>
+      <path d="M95 133 C67 93 112 66 164 95 C222 129 213 166 160 151 C107 136 119 96 176 91 C246 84 309 122 300 157 C289 192 221 187 188 151 C155 115 190 89 248 99 C305 110 332 157 296 181 C248 211 136 189 95 133Z"/>
+    </g>
+    <text x="202" y="294" text-anchor="middle" font-size="28" font-family="Georgia, serif">(a)</text>
+    <text x="175" y="275" font-size="15" font-family="Arial">x₁</text>
+    <text x="-32" y="132" font-size="15" font-family="Arial" transform="rotate(-90 -32 132)">x₂</text>
+  </g>
+  <g transform="translate(70 385)">
+    <use href="#panelGrid"/>
+    <g fill="none" stroke="#001fd2" stroke-width="2" stroke-linecap="round" opacity=".95">
+      <path d="M63 130 C80 61 151 31 244 58 C337 84 397 158 341 204 C282 252 139 229 82 160 C34 103 76 43 171 42 C284 40 378 123 358 183 C335 252 198 248 112 180 C38 121 55 65 137 76 C251 91 333 151 318 196 C301 246 179 224 99 154 C37 99 58 55 137 69 C226 85 295 138 286 181 C275 229 174 216 107 154 C55 105 78 76 143 88 C216 101 265 144 257 176 C249 213 173 203 121 154 C85 120 99 98 151 107 C206 116 238 145 233 170"/>
+    </g>
+    <text x="202" y="294" text-anchor="middle" font-size="28" font-family="Georgia, serif">(b)</text>
+    <text x="178" y="275" font-size="15" font-family="Arial">x₂</text>
+    <text x="-32" y="132" font-size="15" font-family="Arial" transform="rotate(-90 -32 132)">x₃</text>
+  </g>
+  <g transform="translate(690 385)">
+    <use href="#panelGrid"/>
+    <g fill="none" stroke="#001fd2" stroke-width="2" stroke-linecap="round" opacity=".95">
+      <path d="M50 58 C116 19 211 76 287 145 C360 213 397 233 371 159 C347 89 265 37 169 41 C89 45 39 96 62 150 C89 214 202 232 310 196 C400 166 382 88 288 58 C186 26 83 44 55 96 C25 153 78 219 177 224 C274 230 364 183 374 126 C383 75 316 40 221 57 C122 76 43 139 64 187 C87 241 205 232 294 178 C372 132 360 77 277 67 C184 55 86 99 70 146 C52 198 127 223 217 199 C299 177 337 130 304 96 C269 60 184 66 115 111 C55 151 66 191 132 199 C204 208 275 173 292 129 C309 87 253 73 185 96 C126 115 91 151 105 177"/>
+    </g>
+    <text x="202" y="294" text-anchor="middle" font-size="28" font-family="Georgia, serif">(c)</text>
+    <text x="178" y="275" font-size="15" font-family="Arial">x₁</text>
+    <text x="-32" y="132" font-size="15" font-family="Arial" transform="rotate(-90 -32 132)">x₃</text>
+  </g>
+</svg>

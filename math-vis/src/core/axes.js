@@ -1,22 +1,14 @@
 /**
  * axes.js
  *
- * 3D coordinate axes with HTML labels (CSS2DObjects) and a faint reference grid.
+ * 3D coordinate axes with tick marks and CSS2D letter labels.
  *
- * Accepts an optional `renderer` parameter. When provided, CSS2DObjects are
- * attached so axis names (X / Y / Z) and tick values float at the correct
- * 3D positions in world space — rendered by the CSS2DRenderer layer above the
- * WebGL canvas. Without a renderer, falls back to geometry-only (no labels).
+ * These are lightweight local axes for modes that need their own reference.
+ * Spatial modes normally hide them and use SpatialVolume as the single XYZ frame.
  *
- * Grid:
- *   A very faint 5×5 grid on the XY plane gives spatial context without
- *   competing with the main content. Opacity is low so it reads as a
- *   suggestion of space rather than a foreground element.
- *
- * Colour choices (red-green colorblind safe):
- *   X axis → electric blue  (#4488ff)
- *   Y axis → cyan           (#00ddff)
- *   Z axis → pale white     (#aaccff)
+ * Always-visible local axes with arrowheads and labels on both sides.
+ * SpatialVolume supplies the optional surrounding cube/grid, but these axes
+ * remain the mathematical reference for the graphed function.
  */
 
 import * as THREE from 'three'
@@ -24,14 +16,14 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 
 const EXTENT     = 2.5   // long enough to contain Lorenz z-axis (~1.9 world units)
 const TICK_STEP  = 0.25
-const TICK_SIZE  = 0.022
-const ARROW_SIZE = 0.05   // smaller arrowheads at both axis ends
-const OPACITY    = 0.45
+const TICK_SIZE  = 0.028
+const ARROW_SIZE = 0.05
+const OPACITY    = 0.78
 
 const COLOURS = {
-  x: { three: new THREE.Color(0x4488ff), css: '#4488ff' },
-  y: { three: new THREE.Color(0x00ddff), css: '#00ddff' },
-  z: { three: new THREE.Color(0xaaccff), css: '#aaccff' },
+  x: { three: new THREE.Color(0x4499ff), css: '#66b7ff' },
+  y: { three: new THREE.Color(0x00e5ff), css: '#66f2ff' },
+  z: { three: new THREE.Color(0xe8c547), css: '#f2d675' },
 }
 
 export class Axes {
@@ -42,8 +34,11 @@ export class Axes {
   constructor(scene, renderer = null) {
     this.scene    = scene
     this.renderer = renderer
-    this._objects = []   // THREE objects (lines)
-    this._labels  = []   // CSS2DObjects
+
+    this._group = new THREE.Group()
+    scene.add(this._group)
+
+    this._labels = []   // CSS2DObjects (need manual DOM cleanup on dispose)
     this._build()
   }
 
@@ -55,14 +50,13 @@ export class Axes {
     this._buildAxis('x', new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0))
     this._buildAxis('y', new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0))
     this._buildAxis('z', new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0))
-    this._buildGrid()
   }
 
   _buildAxis(name, dir, perp) {
-    const col      = COLOURS[name]
+    const col       = COLOURS[name]
     const positions = []
 
-    // Main line
+    // Main axis line — full extent in both directions
     positions.push(...dir.clone().multiplyScalar(-EXTENT).toArray())
     positions.push(...dir.clone().multiplyScalar( EXTENT).toArray())
 
@@ -72,13 +66,13 @@ export class Axes {
     positions.push(...tipPos.toArray(), ...backPos.clone().add(perp.clone().multiplyScalar( ARROW_SIZE * 0.55)).toArray())
     positions.push(...tipPos.toArray(), ...backPos.clone().add(perp.clone().multiplyScalar(-ARROW_SIZE * 0.55)).toArray())
 
-    // Arrowhead at negative tip (points in the −dir direction)
+    // Arrowhead at negative tip
     const tipNeg  = dir.clone().multiplyScalar(-EXTENT)
     const backNeg = dir.clone().multiplyScalar(-EXTENT + ARROW_SIZE)
     positions.push(...tipNeg.toArray(), ...backNeg.clone().add(perp.clone().multiplyScalar( ARROW_SIZE * 0.55)).toArray())
     positions.push(...tipNeg.toArray(), ...backNeg.clone().add(perp.clone().multiplyScalar(-ARROW_SIZE * 0.55)).toArray())
 
-    // Tick marks
+    // Tick marks on both sides of origin
     let t = TICK_STEP
     while (t < EXTENT - ARROW_SIZE) {
       const c  = dir.clone().multiplyScalar(t)
@@ -90,80 +84,52 @@ export class Axes {
       t += TICK_STEP
     }
 
-    const geo = new THREE.BufferGeometry()
+    const geo  = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    const mat = new THREE.LineBasicMaterial({
-      color: col.three, transparent: true, opacity: OPACITY, depthTest: true,
+    const mat  = new THREE.LineBasicMaterial({
+      color: col.three,
+      transparent: true,
+      opacity: OPACITY,
+      depthTest: true,
+      depthWrite: false,
+      linewidth: 2,
     })
-    const lines = new THREE.LineSegments(geo, mat)
-    this.scene.add(lines)
-    this._objects.push(lines)
+    this._group.add(new THREE.LineSegments(geo, mat))
 
-    // CSS2D axis letter label at the positive tip (only when renderer provided)
+    // CSS2D axis letters at both tips (only when renderer is provided)
     if (this.renderer) {
       this._addLabel(
-        name.toUpperCase(),
+        `+${name.toUpperCase()}`,
         dir.clone().multiplyScalar(EXTENT + 0.12),
         col.css,
-        '11px',
-        '500',
-        0.80,
+      )
+      this._addLabel(
+        `-${name.toUpperCase()}`,
+        dir.clone().multiplyScalar(-EXTENT - 0.12),
+        col.css,
       )
     }
   }
 
-  /**
-   * Create a CSS2DObject div and attach it to the scene.
-   */
-  _addLabel(text, position, color, fontSize, fontWeight, opacity) {
+  _addLabel(text, position, color) {
     const div = document.createElement('div')
     div.textContent = text
     Object.assign(div.style, {
-      fontFamily:   "'Inter', 'SF Mono', monospace",
-      fontSize,
-      fontWeight,
+      fontFamily:   "'Electrolize', 'SF Mono', monospace",
+      fontSize:     '11px',
+      fontWeight:   '700',
       color,
-      opacity:       String(opacity),
+      opacity:      '0.92',
       letterSpacing: '0.06em',
-      userSelect:    'none',
+      userSelect:   'none',
       pointerEvents: 'none',
-      textShadow:    `0 0 8px ${color}55`,
+      textShadow:   `0 0 6px ${color}66`,
     })
 
     const obj = new CSS2DObject(div)
     obj.position.copy(position)
-    this.scene.add(obj)
+    this._group.add(obj)
     this._labels.push(obj)
-  }
-
-  /**
-   * Subtle grid on the XY plane.
-   * Uses LineSegments — low opacity so it reads as background.
-   */
-  _buildGrid() {
-    const step  = TICK_STEP
-    const ext   = EXTENT
-    const positions = []
-
-    for (let v = -ext; v <= ext + 0.001; v += step) {
-      const vr = Math.round(v / step) * step   // avoid float drift
-      // Horizontal lines (along X)
-      positions.push(-ext, vr, 0,  ext, vr, 0)
-      // Vertical lines (along Y)
-      positions.push(vr, -ext, 0,  vr,  ext, 0)
-    }
-
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    const mat = new THREE.LineBasicMaterial({
-      color:       0x1a2a4a,
-      transparent: true,
-      opacity:     0.35,
-      depthTest:   true,
-    })
-    const grid = new THREE.LineSegments(geo, mat)
-    this.scene.add(grid)
-    this._objects.push(grid)
   }
 
   // ---------------------------------------------------------------------------
@@ -171,21 +137,24 @@ export class Axes {
   // ---------------------------------------------------------------------------
 
   setVisible(visible) {
-    this._objects.forEach(o => { o.visible = visible })
-    this._labels.forEach(l => { l.visible = visible })
+    this._group.visible = visible
+    this._labels.forEach(label => {
+      label.visible = visible
+      label.element.style.display = visible ? '' : 'none'
+    })
   }
 
   dispose() {
-    this._objects.forEach(o => {
-      this.scene.remove(o)
-      o.geometry.dispose()
-      o.material.dispose()
+    // Traverse group to dispose geometries and materials
+    this._group.traverse(obj => {
+      if (obj.geometry) obj.geometry.dispose()
+      if (obj.material) obj.material.dispose()
     })
+    // Remove CSS2D DOM elements from the page
     this._labels.forEach(l => {
-      this.scene.remove(l)
       if (l.element.parentNode) l.element.parentNode.removeChild(l.element)
     })
-    this._objects = []
-    this._labels  = []
+    this.scene.remove(this._group)
+    this._labels = []
   }
 }

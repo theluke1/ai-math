@@ -119,6 +119,55 @@ export class AudioReactive {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Float data accessors — used by SignalMode for high-resolution analysis
+  // ---------------------------------------------------------------------------
+
+  /** Fill and return Float32Array of dB values (−Infinity to 0) for the current frame. */
+  getFrequencyData(out = null) {
+    if (!this._analyser) return null
+    if (out && out.length >= this._analyser.frequencyBinCount) {
+      this._analyser.getFloatFrequencyData(out)
+      return out
+    }
+    if (!this._floatFreqBuf || this._floatFreqBuf.length !== this._analyser.frequencyBinCount) {
+      this._floatFreqBuf = new Float32Array(this._analyser.frequencyBinCount)
+    }
+    this._analyser.getFloatFrequencyData(this._floatFreqBuf)
+    return this._floatFreqBuf
+  }
+
+  /** Fill and return Float32Array of normalised time-domain samples (−1 to 1). */
+  getTimeDomainData(out = null) {
+    if (!this._analyser) return null
+    if (out && out.length >= this._analyser.fftSize) {
+      this._analyser.getFloatTimeDomainData(out)
+      return out
+    }
+    if (!this._floatTimeBuf || this._floatTimeBuf.length !== this._analyser.fftSize) {
+      this._floatTimeBuf = new Float32Array(this._analyser.fftSize)
+    }
+    this._analyser.getFloatTimeDomainData(this._floatTimeBuf)
+    return this._floatTimeBuf
+  }
+
+  /** Change the analyser FFT size at runtime (power-of-two, 32–32768). */
+  setFftSize(n) {
+    if (!this._analyser) return
+    this._analyser.fftSize       = n
+    this._data                   = new Uint8Array(this._analyser.frequencyBinCount)
+    this._floatFreqBuf           = null
+    this._floatTimeBuf           = null
+  }
+
+  get fftSize()           { return this._analyser?.fftSize           ?? 512 }
+  get frequencyBinCount() { return this._analyser?.frequencyBinCount ?? 256 }
+  get sampleRate()        { return this._ctx?.sampleRate             ?? 44100 }
+  get analyser()          { return this._analyser }
+  get context()           { return this._ctx }
+
+  // ---------------------------------------------------------------------------
+
   _setupAnalyser() {
     const a = this._ctx.createAnalyser()
     a.fftSize = 512
