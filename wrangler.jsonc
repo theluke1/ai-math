@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "prism",
+  "compatibility_date": "2026-05-05",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "math-vis"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
