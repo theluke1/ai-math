@@ -1323,7 +1323,8 @@
       width: min(300px, calc(100vw - 32px));
       max-height: calc(100vh - 176px);
       padding: 38px 10px 10px;
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       border: 1px solid rgba(var(--mode-accent-rgb), 0.20);
       border-radius: 8px;
       background:
@@ -1519,6 +1520,9 @@
       color:       rgba(140, 175, 215, 0.58);
       line-height: 1.85;
       letter-spacing: 0.03em;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     /* -----------------------------------------------------------------------
