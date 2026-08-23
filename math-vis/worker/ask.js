@@ -20,7 +20,7 @@ const CORS_HEADERS = {
 const MAX_BODY_CHARS     = 60_000
 const MAX_QUESTION_CHARS = 1_200
 const MAX_CONTEXT_CHARS  = 22_000
-const GEMINI_MODEL       = 'gemini-2.5-flash'
+const GEMINI_MODEL       = 'gemini-3.6-flash'
 const MAX_TOKENS         = 1_200
 
 // ── Teaching prompt ────────────────────────────────────────────────────────
