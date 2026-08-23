@@ -214,6 +214,7 @@ async function streamGroq(body, env) {
       max_tokens:  maxTokens,
       temperature: 0.7,
       stream:      true,
+      ...(groqModel.includes('qwen') ? { reasoning_effort: 'none' } : {}),
       messages: [
         { role: 'system', content: TEACHING_PROMPT },
         ...safeMessages,
