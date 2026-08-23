@@ -315,8 +315,10 @@ export default async (request) => {
     return json({ ok: true, endpoint: '/ask', method: 'POST required' }, { status: 405 })
   }
 
-  // Deno.env.get() reads env vars set in the Netlify dashboard
-  const apiKey = Deno.env.get('GEMINI_API_KEY')
+  // Netlify.env.get() is the official way to read env vars in Netlify Edge Functions.
+  // Falls back to Deno.env.get() for local testing with wrangler.
+  const apiKey = (typeof Netlify !== 'undefined' ? Netlify.env.get('GEMINI_API_KEY') : null)
+    ?? Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) {
     return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
   }

@@ -1,6 +1,6 @@
 # Prism · AI Math Visualization Studio
 
-**Live demo → `[your-site].netlify.app`**
+**Live demo → [prism-ai-math.netlify.app](https://prism-ai-math.netlify.app)**
 
 An interactive 3D mathematics visualization studio where every exhibit is a live mathematical instrument. Seven classical systems — parametric curves, Fourier epicycles, chaos attractors, sculptural surfaces, knots, and complex analysis — rendered in real-time WebGL with a built-in AI professor that explains the math behind what you're watching, grounded in the current visual state and your exact parameter values.
 
