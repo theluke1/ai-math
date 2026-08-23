@@ -169,7 +169,7 @@ function compactContext(body) {
 //   data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}
 //   data: [DONE]
 
-async function streamGroq(body, apiKey) {
+async function streamGroq(body, apiKey, groqModel) {
   const phaseInstr = body.requestKind === 'auto'
     ? '\n\nRespond using EXACTLY these three markers, each on its own line, with nothing before the first:\n[INTUITION]\n[EQUATIONS]\n[BEHAVIOR]'
     : ''
@@ -331,5 +331,5 @@ export default async (request) => {
   }
   body.question = body.question.trim().slice(0, MAX_QUESTION_CHARS)
 
-  return streamGroq(body, apiKey)
+  return streamGroq(body, apiKey, groqModel)
 }
