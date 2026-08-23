@@ -676,6 +676,12 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
 
     await this._streamText(demoPrefix(this._lastDemoReason) + text, target, requestKind)
 
+    // Keep history alternating user/assistant so the next real worker call
+    // doesn't send two consecutive user messages (which Groq rejects as invalid).
+    if (requestKind === 'ask' && text) {
+      this._history.push({ role: 'assistant', text })
+    }
+
     if (action) {
       this._pendingAction = action
       this._showActionCard(action)

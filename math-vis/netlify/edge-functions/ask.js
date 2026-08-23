@@ -193,6 +193,10 @@ async function streamGroq(body, apiKey, groqModel) {
     const expected = safeMessages.length % 2 === 0 ? 'user' : 'assistant'
     if (msg.role === expected) safeMessages.push(msg)
   }
+  // History must end with 'assistant' so the current user message alternates correctly.
+  while (safeMessages.length > 0 && safeMessages[safeMessages.length - 1].role === 'user') {
+    safeMessages.pop()
+  }
 
   const baseTokens = ['lesson', 'variables', 'examples'].includes(body.requestKind)
     ? 2400
