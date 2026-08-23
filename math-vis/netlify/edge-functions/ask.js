@@ -319,6 +319,7 @@ export default async (request) => {
   // Falls back to Deno.env.get() for local testing with wrangler.
   const apiKey = (typeof Netlify !== 'undefined' ? Netlify.env.get('GEMINI_API_KEY') : null)
     ?? Deno.env.get('GEMINI_API_KEY')
+  console.log('[ask] key present:', Boolean(apiKey), '| length:', apiKey?.length, '| prefix:', apiKey?.slice(0, 8))
   if (!apiKey) {
     return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
   }
