@@ -1256,7 +1256,7 @@
       background: var(--mode-accent);
       box-shadow: 0 0 6px rgba(var(--mode-accent-rgb), 0.7);
       pointer-events: none;
-      z-index: 9999;
+      z-index: 10001;
       transform: translate(-50%, -50%);
       will-change: transform;
       opacity: 0;
@@ -1273,7 +1273,7 @@
         0 0 10px rgba(var(--mode-accent-rgb), 0.20),
         inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
       pointer-events: none;
-      z-index: 9998;
+      z-index: 10000;
       transform: translate(-50%, -50%);
       will-change: transform;
       opacity: 0;

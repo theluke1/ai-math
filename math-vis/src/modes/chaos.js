@@ -581,7 +581,7 @@ export class ChaosMode {
       .map(([key, value]) => `${key}=${Number(value).toFixed(2)}`)
       .join(', ')
     return [
-      `$$\\begin{aligned}${equations.map(eq => eq.replace(/=/, '&=')).join('\\\\')}\\end{aligned}$$`,
+      `$$\\begin{aligned}${equations.slice(0, -1).map(eq => eq.replace(/=/, '&=')).join('\\\\')}\\end{aligned}$$`,
       params ? `$$\\text{${this._attractor.label}}\\quad ${params}$$` : `$$\\text{${this._attractor.label}}$$`,
     ].join('\n')
   }

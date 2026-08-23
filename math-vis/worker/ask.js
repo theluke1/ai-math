@@ -20,7 +20,7 @@ const CORS_HEADERS = {
 const MAX_BODY_CHARS     = 60_000
 const MAX_QUESTION_CHARS = 1_200
 const MAX_CONTEXT_CHARS  = 22_000
-const GROQ_MODEL         = 'llama-3.3-70b-versatile'
+const GROQ_MODEL_DEFAULT = 'llama-3.1-8b-instant'
 const MAX_TOKENS         = 1_200
 const GROQ_URL           = 'https://api.groq.com/openai/v1/chat/completions'
 
@@ -168,7 +168,8 @@ function compactContext(body) {
 // ── Groq streaming ─────────────────────────────────────────────────────────
 
 async function streamGroq(body, env) {
-  const apiKey = env.GROQ_API_KEY
+  const apiKey    = env.GROQ_API_KEY
+  const groqModel = env.GROQ_MODEL ?? GROQ_MODEL_DEFAULT
   if (!apiKey) {
     return json({ error: 'GROQ_API_KEY is not configured' }, { status: 500 })
   }
@@ -209,7 +210,7 @@ async function streamGroq(body, env) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model:       GROQ_MODEL,
+      model:       groqModel,
       max_tokens:  maxTokens,
       temperature: 0.7,
       stream:      true,
