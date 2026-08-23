@@ -1,17 +1,13 @@
 /**
  * ask.js — Netlify Edge Function  /ask  endpoint
  *
- * Adapted from worker/ask.js (Cloudflare Workers).
- * Runs on Netlify's Deno-based edge runtime — Web APIs are identical so the
- * streaming, SSE, and Gemini call logic are unchanged.
+ * Runs on Netlify's Deno-based edge runtime.
+ * Uses the Groq API (free tier) — OpenAI-compatible, streams SSE deltas.
  *
- * The only differences from the Cloudflare version:
- *   1. Export is a plain async function instead of { fetch(request, env) }
- *   2. API key is read via Deno.env.get() instead of env.GEMINI_API_KEY
- *   3. Path check removed — Netlify routes /ask directly to this function
+ * Free tier: ~6,000 req/day on llama-3.3-70b-versatile, no billing required.
+ * Get a free key at https://console.groq.com → API Keys
  *
- * Set GEMINI_API_KEY in the Netlify dashboard → Site configuration → Env vars.
- * Free tier: 15 req/min, 1 500 req/day — https://aistudio.google.com/apikey
+ * Set GROQ_API_KEY in Netlify dashboard → Site configuration → Env vars.
  */
 
 const CORS_HEADERS = {
@@ -23,8 +19,9 @@ const CORS_HEADERS = {
 const MAX_BODY_CHARS     = 60_000
 const MAX_QUESTION_CHARS = 1_200
 const MAX_CONTEXT_CHARS  = 22_000
-const GEMINI_MODEL       = 'gemini-3.6-flash'
+const GROQ_MODEL         = 'llama-3.3-70b-versatile'
 const MAX_TOKENS         = 1_200
+const GROQ_URL           = 'https://api.groq.com/openai/v1/chat/completions'
 
 // ── Teaching prompt ────────────────────────────────────────────────────────
 
@@ -167,13 +164,12 @@ function compactContext(body) {
   }
 }
 
-// ── Gemini streaming ───────────────────────────────────────────────────────
+// ── Groq streaming ─────────────────────────────────────────────────────────
+// Groq uses the OpenAI-compatible SSE format:
+//   data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}
+//   data: [DONE]
 
-async function streamGemini(body, apiKey) {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}` +
-    `:streamGenerateContent?alt=sse&key=${apiKey}`
-
+async function streamGroq(body, apiKey) {
   const phaseInstr = body.requestKind === 'auto'
     ? '\n\nRespond using EXACTLY these three markers, each on its own line, with nothing before the first:\n[INTUITION]\n[EQUATIONS]\n[BEHAVIOR]'
     : ''
@@ -185,15 +181,17 @@ async function streamGemini(body, apiKey) {
     JSON.stringify(compactContext(body), null, 2),
   ].join('\n')
 
-  const priorTurns = (body.conversationHistory ?? []).map(m => ({
-    role:  m.role,
-    parts: [{ text: String(m.content).slice(0, 4000) }],
+  // Build conversation history in OpenAI format (user/assistant roles)
+  const priorMessages = (body.conversationHistory ?? []).map(m => ({
+    role:    m.role === 'model' ? 'assistant' : 'user',
+    content: String(m.content).slice(0, 4000),
   }))
 
-  const safeTurns = []
-  for (const turn of priorTurns) {
-    const expected = safeTurns.length % 2 === 0 ? 'user' : 'model'
-    if (turn.role === expected) safeTurns.push(turn)
+  // Enforce strictly alternating user/assistant, starting with user
+  const safeMessages = []
+  for (const msg of priorMessages) {
+    const expected = safeMessages.length % 2 === 0 ? 'user' : 'assistant'
+    if (msg.role === expected) safeMessages.push(msg)
   }
 
   const baseTokens = ['lesson', 'variables', 'examples'].includes(body.requestKind)
@@ -203,38 +201,29 @@ async function streamGemini(body, apiKey) {
     ? Math.min(Math.max(body.responseLimit, 160), baseTokens)
     : baseTokens
 
-  const useThinking = body.intent === 'explain' && body.requestKind === 'ask'
-
-  const upstream = await fetch(url, {
+  const upstream = await fetch(GROQ_URL, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      system_instruction: {
-        parts: [{ text: TEACHING_PROMPT }],
-      },
-      contents: [
-        ...safeTurns,
-        {
-          role:  'user',
-          parts: [{ text: userMessage }],
-        },
+      model:       GROQ_MODEL,
+      max_tokens:  maxTokens,
+      temperature: 0.7,
+      stream:      true,
+      messages: [
+        { role: 'system', content: TEACHING_PROMPT },
+        ...safeMessages,
+        { role: 'user',   content: userMessage },
       ],
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        temperature:     0.7,
-        ...(useThinking ? {
-          thinkingConfig: { thinkingBudget: 512 },
-        } : {
-          thinkingConfig: { thinkingBudget: 0 },
-        }),
-      },
     }),
   })
 
   if (!upstream.ok || !upstream.body) {
     const message = await upstream.text()
-    console.error('[ask] Gemini error', upstream.status, message)
-    return json({ error: 'Gemini request failed', message, status: upstream.status }, { status: 502 })
+    console.error('[ask] Groq error', upstream.status, message)
+    return json({ error: 'Groq request failed', message, status: upstream.status }, { status: 502 })
   }
 
   const encoder = new TextEncoder()
@@ -248,21 +237,23 @@ async function streamGemini(body, apiKey) {
       const handleLine = line => {
         if (!line.startsWith('data:')) return
         const dataText = line.slice(5).trim()
-        if (!dataText || dataText === '[DONE]') return
+        if (!dataText || dataText === '[DONE]') {
+          if (dataText === '[DONE]') {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          }
+          return
+        }
 
         try {
-          const payload   = JSON.parse(dataText)
-          const candidate = payload.candidates?.[0]
-          if (!candidate) return
-
-          const text = candidate.content?.parts?.[0]?.text
+          const payload = JSON.parse(dataText)
+          const delta   = payload.choices?.[0]?.delta
+          const text    = delta?.content
           if (text) {
             controller.enqueue(encoder.encode(
               sse('delta', { type: 'delta', delta: text }),
             ))
           }
-
-          if (candidate.finishReason && candidate.finishReason !== 'OTHER') {
+          if (payload.choices?.[0]?.finish_reason === 'stop') {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           }
         } catch {
@@ -315,13 +306,10 @@ export default async (request) => {
     return json({ ok: true, endpoint: '/ask', method: 'POST required' }, { status: 405 })
   }
 
-  // Netlify.env.get() is the official way to read env vars in Netlify Edge Functions.
-  // Falls back to Deno.env.get() for local testing with wrangler.
-  const apiKey = (typeof Netlify !== 'undefined' ? Netlify.env.get('GEMINI_API_KEY') : null)
-    ?? Deno.env.get('GEMINI_API_KEY')
-  console.log('[ask] key present:', Boolean(apiKey), '| length:', apiKey?.length, '| prefix:', apiKey?.slice(0, 8))
+  const apiKey = (typeof Netlify !== 'undefined' ? Netlify.env.get('GROQ_API_KEY') : null)
+    ?? Deno.env.get('GROQ_API_KEY')
   if (!apiKey) {
-    return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
+    return json({ error: 'GROQ_API_KEY is not configured' }, { status: 500 })
   }
 
   let body
@@ -340,5 +328,5 @@ export default async (request) => {
   }
   body.question = body.question.trim().slice(0, MAX_QUESTION_CHARS)
 
-  return streamGemini(body, apiKey)
+  return streamGroq(body, apiKey)
 }
