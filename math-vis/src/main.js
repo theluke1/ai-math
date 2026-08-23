@@ -26,6 +26,7 @@ import { SpatialVolume }       from './core/spatial-volume.js'
 import { AiPanel }             from './core/ai-panel.js'
 import { renderMath }          from './core/math-render.js'
 import { annotatePanel }       from './core/ui.js'
+import { runOnboarding }       from './core/onboarding.js'
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -139,9 +140,12 @@ const hud = {
 const controlsPanel = document.getElementById('controls-panel')
 const analyticsPanel = document.getElementById('analytics-panel')
 const analytics = {
-  mode: document.getElementById('analytics-mode'),
-  fps:  document.getElementById('analytics-fps'),
-  geo:  document.getElementById('analytics-geo'),
+  mode:  document.getElementById('analytics-mode'),
+  fps:   document.getElementById('analytics-fps'),
+  geo:   document.getElementById('analytics-geo'),
+  calls: document.getElementById('analytics-calls'),
+  tris:  document.getElementById('analytics-tris'),
+  ms:    document.getElementById('analytics-ms'),
 }
 
 let paused = false
@@ -154,7 +158,9 @@ let lastAudioEnabled = false
 let fpsSampleTime = performance.now()
 let fpsFrames = 0
 let currentFps = 0
-let analyticsSampleTime = performance.now()
+let analyticsSampleTime  = performance.now()
+let renderMsSmoothed     = 0
+let targetBloomStrength  = 0.45   // reduced per-mode (e.g. surfaces uses 0.2)
 let liveEquationFrame = 0
 let lastLiveEquation = ''
 let tooltipAnnotationFrame = 0
@@ -404,6 +410,7 @@ function mountControlPane() {
     activeMode.pane._prismUiWired = true
     activeMode.pane.on?.('change', () => {
       scheduleLiveEquationUpdate()
+      scheduleUrlUpdate()
     })
     paneEl.addEventListener('click', () => {
       scheduleLiveEquationUpdate()
@@ -415,9 +422,15 @@ function mountControlPane() {
 }
 
 function updateAnalytics() {
-  const memoryInfo = renderer.webgl.info.memory
-  analytics.fps.textContent = currentFps ? `${currentFps} fps` : '--'
-  analytics.geo.textContent = `${memoryInfo.geometries} geometries`
+  const memInfo    = renderer.webgl.info.memory
+  const renderInfo = renderer.webgl.info.render
+  analytics.fps.textContent   = currentFps ? `${currentFps} fps` : '--'
+  analytics.geo.textContent   = `${memInfo.geometries} geo`
+  analytics.calls.textContent = `${renderInfo.calls}`
+  analytics.tris.textContent  = renderInfo.triangles > 999
+    ? `${(renderInfo.triangles / 1000).toFixed(1)}k`
+    : `${renderInfo.triangles}`
+  analytics.ms.textContent    = `${renderMsSmoothed.toFixed(1)} ms`
 }
 
 function buildDefaultLessonContext(mode, extra = null) {
@@ -539,11 +552,69 @@ function buildAiContext(options = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// URL state — shareable links encode current mode + parameters in the hash
+// ---------------------------------------------------------------------------
+
+// Encode the current mode and params as a URL hash string.
+// Format: #mode=chaos&p=BASE64(JSON)  — mode is human-readable, params are compact.
+function buildShareHash(mode, params) {
+  try {
+    const encoded = btoa(JSON.stringify(params))
+    return `#mode=${encodeURIComponent(mode)}&p=${encoded}`
+  } catch {
+    return `#mode=${encodeURIComponent(mode)}`
+  }
+}
+
+// Write current state into window.location without pushing a history entry.
+function updateUrlHash() {
+  const mode   = document.body.dataset.mode ?? 'lissajous'
+  const params = activeMode?.params ?? {}
+  history.replaceState(null, '', buildShareHash(mode, params))
+}
+
+// Debounced version — avoids flooding history on every slider tick.
+let _urlUpdateTimer = null
+function scheduleUrlUpdate() {
+  clearTimeout(_urlUpdateTimer)
+  _urlUpdateTimer = setTimeout(updateUrlHash, 600)
+}
+
+// Parse the URL hash on first load and return { mode, params } or null.
+function parseUrlHash() {
+  const raw = window.location.hash.slice(1)
+  if (!raw) return null
+  try {
+    const parts = new URLSearchParams(raw)
+    const mode  = parts.get('mode')
+    if (!mode || !MODE_META[mode]) return null
+    let params = null
+    const p = parts.get('p')
+    if (p) params = JSON.parse(atob(p))
+    return { mode, params }
+  } catch {
+    return null
+  }
+}
+
+// Params to apply once the first mode is instantiated (set from URL on boot).
+let _entryUrlParams = null
+
 setModeChrome('lissajous')
 updateAudioChrome()
 setControlsVisible(true)
 setSpatialEnabled(true)
 updateLiveEquation()
+
+// Apply any URL hash state — sets entry mode and stashes params for first enterScene
+;(function applyUrlState() {
+  const urlState = parseUrlHash()
+  if (!urlState) return
+  _entryMode      = urlState.mode
+  _entryUrlParams = urlState.params
+  setActiveNavMode(urlState.mode)
+})()
 requestAnimationFrame(mountControlPane)
 window.addEventListener('mathvis:mode-pane-changed', event => {
   if (event.detail?.showControls) setControlsVisible(true)
@@ -651,6 +722,9 @@ function enterExperience() {
           setActiveNavMode('lissajous')
           setModeChrome('lissajous', true)
         }
+
+        // First-visit coach-mark tour — no-op on return visits
+        runOnboarding()
       },
     })
     .to(renderer.bloomPass, { strength: 0.9, duration: 0.42, ease: 'power2.out' }, 0)
@@ -787,6 +861,13 @@ copyParamsBtn?.addEventListener('click', () => {
     .catch(() => showToast('Clipboard unavailable'))
 })
 
+document.getElementById('share-url-btn')?.addEventListener('click', () => {
+  updateUrlHash()
+  navigator.clipboard.writeText(window.location.href)
+    .then(() => showToast('Share link copied'))
+    .catch(() => showToast('Clipboard unavailable'))
+})
+
 loadParamsBtn?.addEventListener('click', () => loadParamsFile?.click())
 loadParamsFile?.addEventListener('change', () => {
   const file = loadParamsFile.files?.[0]
@@ -903,9 +984,20 @@ function enterScene(name) {
     case 'complex':    activeMode = new ComplexMode(renderer.scene, renderer);   break
   }
 
+  // Apply URL-encoded params on first load (one-shot, cleared after use)
+  if (_entryUrlParams) {
+    try {
+      if (!activeMode.applyParams?.(_entryUrlParams)) {
+        Object.assign(activeMode.params, _entryUrlParams)
+      }
+    } catch { /* ignore malformed params */ }
+    _entryUrlParams = null
+  }
+
   requestAnimationFrame(() => {
     mountControlPane()
     updateLiveEquation()
+    updateUrlHash()    // reflect final state in the address bar
   })
 
   // Re-add particles to the scene (scene.clear() removed them)
@@ -922,6 +1014,9 @@ function enterScene(name) {
   updateSpatialChrome()
   updateLiveEquation()
 
+  // Surfaces curvature coloring reads poorly with full bloom — dial it back
+  targetBloomStrength = name === 'surfaces' ? 0.2 : 0.45
+
   // ── Phase 2: enter new scene ──────────────────────────────────────────────
   const enterTl = gsap.timeline({
     onComplete: () => { transitioning = false },
@@ -929,7 +1024,7 @@ function enterScene(name) {
 
   enterTl
     .to(overlay, { opacity: 0, duration: 0.5, ease: 'power2.out' }, 0)
-    .to(renderer.bloomPass, { strength: 0.45, duration: 1.4, ease: 'power3.out' }, 0)
+    .to(renderer.bloomPass, { strength: targetBloomStrength, duration: 1.4, ease: 'power3.out' }, 0)
     .to(renderer.chromaPass.uniforms.uStrength, { value: 0.0006, duration: 1.0, ease: 'power2.out' }, 0)
 }
 
@@ -970,7 +1065,7 @@ function tick() {
   // Mandelbrot disables bloom entirely (bloomPass.strength = 0) to prevent
   // the fractal exterior from washing out to white.
   if (audio.enabled && renderer.bloomPass.strength > 0) {
-    renderer.bloomPass.strength = 0.45 + audio.overall * 0.35
+    renderer.bloomPass.strength = targetBloomStrength + audio.overall * 0.35
   }
 
   // Particle field — cursor NDC from renderer's internal mouse tracker
@@ -980,7 +1075,12 @@ function tick() {
 
     activeMode.update(dt)
   }
+
+  // Measure GPU render time (rolling average) and reset per-frame counters
+  renderer.webgl.info.reset()
+  const _t0 = performance.now()
   renderer.render()
+  renderMsSmoothed = renderMsSmoothed * 0.85 + (performance.now() - _t0) * 0.15
 
   if (analyticsVisible && now - analyticsSampleTime > 180) {
     updateAnalytics()

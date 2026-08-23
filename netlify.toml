@@ -1,0 +1,19 @@
+# Netlify configuration for Prism · AI Math Visualization Studio
+#
+# Deploys from the math-vis/ subdirectory within this repo.
+# The /ask route is handled by a Netlify Edge Function that proxies
+# to the Gemini API — the API key never touches the browser.
+#
+# Required env var (set in Netlify dashboard → Site config → Env vars):
+#   GEMINI_API_KEY — your Google AI Studio key (free tier)
+
+[build]
+  base    = "math-vis"
+  command = "npm run build"
+  publish = "dist"
+
+# Route /ask to the edge function so the AI backend is co-deployed
+# with the frontend — no separate server needed.
+[[edge_functions]]
+  path     = "/ask"
+  function = "ask"

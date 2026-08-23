@@ -140,13 +140,6 @@ export class FourierDrawMode {
 
   _buildUI() {
     this.pane = new Pane({ title: 'Fourier Draw' })
-    Object.assign(this.pane.element.style, {
-      position: 'fixed',
-      top: '60px',
-      right: '16px',
-      zIndex: '100',
-      width: '260px',
-    })
     animatePanel(this.pane)
 
     const shapeFolder = this.pane.addFolder({ title: 'Shape', expanded: true })

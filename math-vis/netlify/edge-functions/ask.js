@@ -1,14 +1,17 @@
 /**
- * ask.js — Cloudflare Worker  /ask  endpoint
+ * ask.js — Netlify Edge Function  /ask  endpoint
  *
- * Accepts POST { question, mode, equation, params, extra, lessonContext, schema }
- * Returns an SSE stream of   event: delta  /  data: [DONE]  events.
+ * Adapted from worker/ask.js (Cloudflare Workers).
+ * Runs on Netlify's Deno-based edge runtime — Web APIs are identical so the
+ * streaming, SSE, and Gemini call logic are unchanged.
  *
- * Uses the Google Gemini API (free tier via AI Studio key).
- * The browser never holds an API key. This Worker keeps it server-side.
+ * The only differences from the Cloudflare version:
+ *   1. Export is a plain async function instead of { fetch(request, env) }
+ *   2. API key is read via Deno.env.get() instead of env.GEMINI_API_KEY
+ *   3. Path check removed — Netlify routes /ask directly to this function
  *
- * Free tier limits (as of 2025): 15 req/min, 1 500 req/day, 1M tokens/min.
- * Get a free key at https://aistudio.google.com/apikey
+ * Set GEMINI_API_KEY in the Netlify dashboard → Site configuration → Env vars.
+ * Free tier: 15 req/min, 1 500 req/day — https://aistudio.google.com/apikey
  */
 
 const CORS_HEADERS = {
@@ -119,8 +122,6 @@ function sse(event, data) {
 function compactContext(body) {
   const intent = body.intent ?? 'explain'
 
-  // Params and equation intents only need the current values — no lesson notes.
-  // This keeps payloads small and responses fast for quick slider/equation queries.
   if (intent === 'params' || intent === 'equation') {
     return {
       mode:        body.mode,
@@ -137,7 +138,6 @@ function compactContext(body) {
     }
   }
 
-  // Full explain / lesson / variables / examples — include everything.
   const context = {
     mode:          body.mode,
     requestKind:   body.requestKind,
@@ -150,7 +150,6 @@ function compactContext(body) {
   const encoded = JSON.stringify(context)
   if (encoded.length <= MAX_CONTEXT_CHARS) return context
 
-  // Fallback trim when context is unusually large
   return {
     mode:          body.mode,
     requestKind:   body.requestKind,
@@ -169,18 +168,12 @@ function compactContext(body) {
 }
 
 // ── Gemini streaming ───────────────────────────────────────────────────────
-// Gemini SSE format (alt=sse):
-//   data: {"candidates":[{"content":{"parts":[{"text":"..."}],"role":"model"},...}],...}
-//
-// Text lives at candidates[0].content.parts[0].text.
-// The final chunk sets candidates[0].finishReason = "STOP".
 
-async function streamGemini(body, env) {
+async function streamGemini(body, apiKey) {
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}` +
-    `:streamGenerateContent?alt=sse&key=${env.GEMINI_API_KEY}`
+    `:streamGenerateContent?alt=sse&key=${apiKey}`
 
-  // Phase structure only for auto-explain cards; lesson/variables/examples are free-form
   const phaseInstr = body.requestKind === 'auto'
     ? '\n\nRespond using EXACTLY these three markers, each on its own line, with nothing before the first:\n[INTUITION]\n[EQUATIONS]\n[BEHAVIOR]'
     : ''
@@ -192,25 +185,17 @@ async function streamGemini(body, env) {
     JSON.stringify(compactContext(body), null, 2),
   ].join('\n')
 
-  // Build multi-turn contents array — prepend prior conversation turns when
-  // available so the AI can reference earlier context without re-explaining.
-  // Gemini requires strictly alternating user/model roles.
   const priorTurns = (body.conversationHistory ?? []).map(m => ({
-    role:  m.role,   // already 'user' or 'model' from the client
-    parts: [{ text: String(m.content).slice(0, 4000) }],  // cap each prior turn
+    role:  m.role,
+    parts: [{ text: String(m.content).slice(0, 4000) }],
   }))
 
-  // Guard: Gemini rejects if the first turn isn't 'user' or roles aren't alternating.
-  // Filter to ensure strictly alternating, starting with 'user'.
   const safeTurns = []
   for (const turn of priorTurns) {
     const expected = safeTurns.length % 2 === 0 ? 'user' : 'model'
     if (turn.role === expected) safeTurns.push(turn)
   }
 
-  // Longer responses for full lesson/variable/examples tabs.
-  // The client sends responseLimit to right-size token allocation per intent —
-  // honour it when present so simple questions don't burn the full 1 200 tokens.
   const baseTokens = ['lesson', 'variables', 'examples'].includes(body.requestKind)
     ? 2400
     : MAX_TOKENS
@@ -218,9 +203,6 @@ async function streamGemini(body, env) {
     ? Math.min(Math.max(body.responseLimit, 160), baseTokens)
     : baseTokens
 
-  // Enable Gemini's built-in mathematical reasoning for deep explain questions.
-  // Thinking is skipped for params/equation intents (fast lookup, no extra depth needed)
-  // and for lesson/variables/examples tabs (they are already structured prompts).
   const useThinking = body.intent === 'explain' && body.requestKind === 'ask'
 
   const upstream = await fetch(url, {
@@ -241,13 +223,9 @@ async function streamGemini(body, env) {
         maxOutputTokens: maxTokens,
         temperature:     0.7,
         ...(useThinking ? {
-          thinkingConfig: {
-            thinkingBudget: 512,   // reasoning tokens — included in free tier
-          },
+          thinkingConfig: { thinkingBudget: 512 },
         } : {
-          thinkingConfig: {
-            thinkingBudget: 0,     // disable for quick lookups to save latency
-          },
+          thinkingConfig: { thinkingBudget: 0 },
         }),
       },
     }),
@@ -267,18 +245,16 @@ async function streamGemini(body, env) {
       const reader = upstream.body.getReader()
       let   buffer = ''
 
-      /** Process one complete SSE data line */
       const handleLine = line => {
         if (!line.startsWith('data:')) return
         const dataText = line.slice(5).trim()
         if (!dataText || dataText === '[DONE]') return
 
         try {
-          const payload = JSON.parse(dataText)
+          const payload   = JSON.parse(dataText)
           const candidate = payload.candidates?.[0]
           if (!candidate) return
 
-          // Forward text delta
           const text = candidate.content?.parts?.[0]?.text
           if (text) {
             controller.enqueue(encoder.encode(
@@ -286,7 +262,6 @@ async function streamGemini(body, env) {
             ))
           }
 
-          // Stream finished
           if (candidate.finishReason && candidate.finishReason !== 'OTHER') {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           }
@@ -304,9 +279,7 @@ async function streamGemini(body, env) {
           buffer = lines.pop() ?? ''
           for (const line of lines) handleLine(line.trimEnd())
         }
-        // Flush remaining buffer
         if (buffer.trim()) handleLine(buffer.trimEnd())
-        // Ensure client always receives [DONE]
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
       } catch (err) {
         controller.enqueue(encoder.encode(
@@ -331,48 +304,38 @@ async function streamGemini(body, env) {
   })
 }
 
-// ── Request handler ────────────────────────────────────────────────────────
+// ── Edge Function handler ──────────────────────────────────────────────────
 
-export default {
-  async fetch(request, env) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS_HEADERS })
+export default async (request) => {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: CORS_HEADERS })
+  }
+
+  if (request.method !== 'POST') {
+    return json({ ok: true, endpoint: '/ask', method: 'POST required' }, { status: 405 })
+  }
+
+  // Deno.env.get() reads env vars set in the Netlify dashboard
+  const apiKey = Deno.env.get('GEMINI_API_KEY')
+  if (!apiKey) {
+    return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
+  }
+
+  let body
+  try {
+    const bodyText = await request.text()
+    if (bodyText.length > MAX_BODY_CHARS) {
+      return json({ error: 'Request too large' }, { status: 413 })
     }
+    body = JSON.parse(bodyText)
+  } catch {
+    return json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
 
-    const url = new URL(request.url)
-    if (url.pathname !== '/ask') {
-      return json({ error: 'Not found' }, { status: 404 })
-    }
+  if (!body.question || typeof body.question !== 'string') {
+    return json({ error: 'Missing question' }, { status: 400 })
+  }
+  body.question = body.question.trim().slice(0, MAX_QUESTION_CHARS)
 
-    if (request.method !== 'POST') {
-      return json({
-        ok: true,
-        endpoint: '/ask',
-        method: 'POST required',
-        hasGeminiKey: Boolean(env.GEMINI_API_KEY),
-      }, { status: 405 })
-    }
-
-    if (!env.GEMINI_API_KEY) {
-      return json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
-    }
-
-    let body
-    try {
-      const bodyText = await request.text()
-      if (bodyText.length > MAX_BODY_CHARS) {
-        return json({ error: 'Request too large' }, { status: 413 })
-      }
-      body = JSON.parse(bodyText)
-    } catch {
-      return json({ error: 'Invalid JSON body' }, { status: 400 })
-    }
-
-    if (!body.question || typeof body.question !== 'string') {
-      return json({ error: 'Missing question' }, { status: 400 })
-    }
-    body.question = body.question.trim().slice(0, MAX_QUESTION_CHARS)
-
-    return streamGemini(body, env)
-  },
+  return streamGemini(body, apiKey)
 }

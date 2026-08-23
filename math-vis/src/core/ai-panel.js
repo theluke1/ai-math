@@ -266,6 +266,36 @@ const EQUATION_PATTERNS = [
 ]
 
 // ---------------------------------------------------------------------------
+// Session response cache
+// ---------------------------------------------------------------------------
+// Keyed by mode + requestKind + normalised question.
+// Only caches explain-intent Ask responses and generated tab content
+// (lesson / variables / examples) — never params or equation intents, since
+// those depend on live parameter state which changes every slider move.
+
+const CACHE_PREFIX = 'prism-ai-v1:'
+const CACHE_MAX    = 60   // max entries per session
+
+function cacheKey(mode, requestKind, question) {
+  return CACHE_PREFIX + [mode, requestKind, question.toLowerCase().trim()].join('|')
+}
+
+function cacheGet(mode, requestKind, question) {
+  try {
+    return sessionStorage.getItem(cacheKey(mode, requestKind, question)) ?? null
+  } catch { return null }
+}
+
+function cacheSet(mode, requestKind, question, text) {
+  try {
+    // Evict oldest entries if approaching the limit
+    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(CACHE_PREFIX))
+    if (keys.length >= CACHE_MAX) sessionStorage.removeItem(keys[0])
+    sessionStorage.setItem(cacheKey(mode, requestKind, question), text)
+  } catch { /* sessionStorage full or blocked — silently skip */ }
+}
+
+// ---------------------------------------------------------------------------
 // Intent classifier
 // ---------------------------------------------------------------------------
 
@@ -317,24 +347,26 @@ export class AiPanel {
     this._streaming     = false
     this._undoStack     = []
     this._pendingAction = null
+    this._history       = []   // { role: 'user'|'assistant', text: string }[]
 
     // DOM refs
-    this._label      = element.querySelector('.ai-label')
-    this._modeLabel  = element.querySelector('.ai-mode-label')
-    this._response   = element.querySelector('.ai-response')
-    this._actionCard = element.querySelector('.ai-action-card')
-    this._actionType = element.querySelector('.ai-action-type')
-    this._actionDesc = element.querySelector('.ai-action-desc')
+    this._label       = element.querySelector('.ai-label')
+    this._modeLabel   = element.querySelector('.ai-mode-label')
+    this._response    = element.querySelector('.ai-response')
+    this._actionCard  = element.querySelector('.ai-action-card')
+    this._actionType  = element.querySelector('.ai-action-type')
+    this._actionDesc  = element.querySelector('.ai-action-desc')
     this._actionDeltas = element.querySelector('.ai-action-deltas')
-    this._applyBtn   = element.querySelector('.ai-apply-btn')
-    this._undoBtn    = element.querySelector('.ai-undo-btn')
-    this._chips      = element.querySelector('.ai-chips')
-    this._input      = element.querySelector('.ai-input')
-    this._sendBtn    = element.querySelector('.ai-send-btn')
-    this._closeBtn   = element.querySelector('.ai-close')
-    this._tabs       = [...element.querySelectorAll('.ai-tab')]
-    this._panels     = [...element.querySelectorAll('.ai-tab-panel')]
-    this._outputs    = {
+    this._applyBtn    = element.querySelector('.ai-apply-btn')
+    this._undoBtn     = element.querySelector('.ai-undo-btn')
+    this._chips       = element.querySelector('.ai-chips')
+    this._clearBtn    = element.querySelector('.ai-clear-btn')
+    this._input       = element.querySelector('.ai-input')
+    this._sendBtn     = element.querySelector('.ai-send-btn')
+    this._closeBtn    = element.querySelector('.ai-close')
+    this._tabs        = [...element.querySelectorAll('.ai-tab')]
+    this._panels      = [...element.querySelectorAll('.ai-tab-panel')]
+    this._outputs     = {
       lesson:    element.querySelector('[data-panel="lesson"] .ai-tab-output'),
       variables: element.querySelector('[data-panel="variables"] .ai-tab-output'),
       examples:  element.querySelector('[data-panel="examples"] .ai-tab-output'),
@@ -386,6 +418,11 @@ export class AiPanel {
     this._sendBtn.addEventListener('click',  () => this._submit())
     this._applyBtn.addEventListener('click', () => this._apply())
     this._undoBtn.addEventListener('click',  () => this._undo())
+    this._clearBtn?.addEventListener('click', () => {
+      this._history = []
+      this._response.innerHTML = ''
+      this._clearBtn.hidden = true
+    })
 
     this._tabs.forEach(tab => {
       tab.addEventListener('click', () => this._setTab(tab.dataset.tab))
@@ -433,7 +470,27 @@ export class AiPanel {
     if (!question || this._streaming) return
     this._input.value = ''
     this._hideActionCard()
-    this._respond(question, { target: this._response, requestKind: 'ask' })
+
+    // Append user message to conversation thread
+    this._history.push({ role: 'user', text: question })
+    const userBubble = document.createElement('div')
+    userBubble.className = 'ai-message ai-message--user'
+    userBubble.textContent = question
+    this._response.appendChild(userBubble)
+
+    // Create empty assistant bubble — the streaming response fills it
+    const assistantBubble = document.createElement('div')
+    assistantBubble.className = 'ai-message ai-message--assistant'
+    this._response.appendChild(assistantBubble)
+    this._response.scrollTop = this._response.scrollHeight
+
+    if (this._clearBtn) this._clearBtn.hidden = false
+
+    this._respond(question, {
+      target:       assistantBubble,
+      scrollTarget: this._response,
+      requestKind:  'ask',
+    })
   }
 
   _tabPrompt(kind) {
@@ -488,10 +545,8 @@ Rules:
   _generateTab(kind) {
     if (!kind || this._streaming) return
     this._setTab(kind)
-    this._respond(this._tabPrompt(kind), {
-      target: this._outputs[kind],
-      requestKind: kind,
-    })
+    const target = this._outputs[kind]
+    this._respond(this._tabPrompt(kind), { target, scrollTarget: target, requestKind: kind })
   }
 
   _thinkingLabel(requestKind = 'ask') {
@@ -520,12 +575,29 @@ Rules:
     return target.querySelector('.ai-thinking')
   }
 
-  async _respond(question, { target = this._response, requestKind = 'ask' } = {}) {
-    const intent = requestKind === 'ask' ? classifyIntent(question) : requestKind
-    const ctx = this._getCtx({ question, requestKind, intent })
+  async _respond(question, { target = this._response, scrollTarget, requestKind = 'ask' } = {}) {
+    const _scroll = scrollTarget ?? target
+    const intent  = requestKind === 'ask' ? classifyIntent(question) : requestKind
+    const ctx     = this._getCtx({ question, requestKind, intent })
     this._lastDemoReason = ''
+
+    // Cache hit — explain and tab content are deterministic enough to reuse.
+    // Params/equation intents are skipped because they depend on live state.
+    const cacheable = intent === 'explain' || requestKind !== 'ask'
+    if (cacheable) {
+      const cached = cacheGet(ctx.mode, requestKind, question)
+      if (cached) {
+        target.innerHTML = renderStudyText(cached)
+        _scroll.scrollTop = _scroll.scrollHeight
+        if (requestKind === 'ask') this._history.push({ role: 'assistant', text: cached })
+        return
+      }
+    }
+
     try {
-      const handled = await this._respondFromWorker(question, ctx, { target, requestKind, intent })
+      const handled = await this._respondFromWorker(question, ctx, {
+        target, scrollTarget: _scroll, requestKind, intent, cacheable,
+      })
       if (handled) return
     } catch (err) {
       console.info('[AI] Worker unavailable; using local demo response.', err)
@@ -533,7 +605,7 @@ Rules:
       this._showToast?.('AI Worker unavailable; using local demo')
     }
 
-    await this._respondMock(question, ctx, { target, requestKind })
+    await this._respondMock(question, ctx, { target, scrollTarget: _scroll, requestKind })
   }
 
   async _respondMock(question, ctx = this._getCtx(), { target = this._response, requestKind = 'ask' } = {}) {
@@ -625,10 +697,23 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
     if (ctx.lessonContext && (requestKind !== 'ask' || intent === 'explain')) {
       payload.lessonContext = ctx.lessonContext
     }
+
+    // Include prior conversation turns for Ask tab so the AI has context.
+    // Exclude the last entry (current user question, already in userMessage).
+    if (requestKind === 'ask' && this._history.length > 1) {
+      payload.conversationHistory = this._history
+        .slice(0, -1)       // prior turns only
+        .slice(-4)          // cap at 2 exchanges (4 messages) to stay in token budget
+        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', content: m.text }))
+    }
+    // Adaptive token budget — allocate more for deep explanations, less for
+    // quick parameter or equation lookups. The worker caps at its own MAX_TOKENS.
     if (requestKind === 'ask') {
-      payload.responseLimit = intent === 'params' || intent === 'equation' ? 180 : 260
+      if (intent === 'params')    payload.responseLimit = 320
+      else if (intent === 'equation') payload.responseLimit = 480
+      else                            payload.responseLimit = 1200  // full explain
     } else {
-      payload.responseLimit = requestKind === 'lesson' ? 620 : 420
+      payload.responseLimit = requestKind === 'lesson' ? 2400 : 1600
     }
     return payload
   }
@@ -657,7 +742,8 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
     return `AI request failed (${status}).`
   }
 
-  async _respondFromWorker(question, ctx, { target = this._response, requestKind = 'ask', intent = 'explain' } = {}) {
+  async _respondFromWorker(question, ctx, { target = this._response, scrollTarget, requestKind = 'ask', intent = 'explain', cacheable = false } = {}) {
+    const _scroll = scrollTarget ?? target
     this._streaming = true
     this._label.classList.add('streaming')
     let thinking = this._showThinking(target, requestKind)
@@ -736,7 +822,7 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
       rendered += delta
       target.textContent = rendered
       target.appendChild(cursor)
-      target.scrollTop = target.scrollHeight
+      _scroll.scrollTop = _scroll.scrollHeight
     }
 
     const handleEvent = raw => {
@@ -778,7 +864,10 @@ Once the AI Worker is connected, this tab will connect ${title} to real examples
       // Final KaTeX render pass — converts $...$ to rendered math
       if (rendered.trim()) {
         target.innerHTML = renderStudyText(rendered.trim())
-        target.scrollTop = target.scrollHeight
+        _scroll.scrollTop = _scroll.scrollHeight
+        if (cacheable) cacheSet(ctx.mode, requestKind, question, rendered.trim())
+        // Commit to conversation history (Ask tab only)
+        if (requestKind === 'ask') this._history.push({ role: 'assistant', text: rendered.trim() })
       }
     }
 

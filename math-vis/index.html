@@ -218,6 +218,7 @@
       <button id="pause-btn" class="hud-btn" type="button" title="Pause animation" aria-label="Pause animation">II</button>
       <button id="capture-btn"      class="hud-btn" type="button" title="Save PNG snapshot" aria-label="Save PNG">PNG</button>
       <button id="copy-params-btn"  class="hud-btn" type="button" title="Copy parameters as JSON" aria-label="Copy parameters">{ }</button>
+      <button id="share-url-btn"    class="hud-btn" type="button" title="Copy shareable link" aria-label="Share URL">URL</button>
       <button id="load-params-btn"  class="hud-btn" type="button" title="Load parameters from JSON file" aria-label="Load parameters">↑ JSON</button>
       <input  id="load-params-file" type="file" accept=".json" aria-hidden="true" style="display:none">
       <button id="fullscreen-btn" class="hud-btn" type="button" title="Fullscreen" aria-label="Fullscreen">[]</button>
@@ -248,6 +249,9 @@
       <div class="analytics-row"><dt>Mode</dt><dd id="analytics-mode">Lissajous</dd></div>
       <div class="analytics-row"><dt>FPS</dt><dd id="analytics-fps">--</dd></div>
       <div class="analytics-row"><dt>Objects</dt><dd id="analytics-geo">--</dd></div>
+      <div class="analytics-row"><dt>Draw Calls</dt><dd id="analytics-calls">--</dd></div>
+      <div class="analytics-row"><dt>Triangles</dt><dd id="analytics-tris">--</dd></div>
+      <div class="analytics-row"><dt>Render ms</dt><dd id="analytics-ms">--</dd></div>
       <div class="analytics-row"><dt>Renderer</dt><dd>WebGL / bloom</dd></div>
     </dl>
   </aside>
@@ -270,7 +274,7 @@
 
     <div class="ai-tab-panels">
       <section class="ai-tab-panel active" data-panel="ask" role="tabpanel">
-        <div class="ai-response" aria-live="polite"></div>
+        <div class="ai-response" role="log" aria-live="polite" aria-label="Conversation"></div>
 
         <div class="ai-action-card" hidden>
           <div class="ai-action-type"></div>
@@ -282,7 +286,10 @@
           </div>
         </div>
 
-        <div class="ai-chips"></div>
+        <div class="ai-chips-row">
+          <div class="ai-chips"></div>
+          <button class="ai-clear-btn" type="button" title="Clear conversation" aria-label="Clear conversation" hidden>Clear</button>
+        </div>
 
         <div class="ai-input-row">
           <textarea class="ai-input" rows="2" placeholder="Ask anything, describe a change, or enter an equation…" aria-label="AI input"></textarea>
