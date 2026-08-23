@@ -1,7 +1,10 @@
 # AI Deployment
 
-The browser never calls the Google Gemini API directly. It calls `/ask`, and the
-Cloudflare Worker uses `GEMINI_API_KEY` privately on the server side.
+The browser never calls the Google Gemini API directly. It posts to `/ask`, and the
+server-side edge function reads `GEMINI_API_KEY` from the environment and proxies
+the streaming response back to the client. The key never touches the browser.
+
+---
 
 ## Getting a free Gemini API key
 
@@ -14,64 +17,67 @@ No credit card required.
 
 ---
 
-## Production — Cloudflare Pages (recommended)
+## Production — Netlify (recommended)
 
-Deploy the repo to Cloudflare Pages. The `functions/ask.js` file is
-automatically picked up as a Pages Function, served at the same origin:
+The repo includes a Netlify Edge Function at `netlify/edge-functions/ask.js` and a
+`netlify.toml` at the repo root that routes `/ask` to it automatically.
 
-```
-https://your-site.pages.dev/ask
-```
+**Setup:**
 
-No frontend configuration is needed because the app defaults to:
+1. Connect the repo to Netlify (Add new site → Import from Git)
+2. Netlify auto-detects `netlify.toml` — build settings are pre-filled
+3. Go to **Site configuration → Environment variables** and add:
+   ```
+   GEMINI_API_KEY = AIza...
+   ```
+4. Go to **Deploys → Trigger deploy → Deploy site** (env var changes require a manual redeploy)
 
-```env
-VITE_AI_ENDPOINT=/ask
-```
+Every subsequent `git push` to `main` deploys automatically.
 
-In your Cloudflare Pages dashboard, add one **secret** (not a plain var):
+The edge function runs on Deno at Netlify's network edge. It uses the same Web APIs
+as the Cloudflare Worker version (fetch, ReadableStream, TextEncoder) so the logic
+is identical — only the export signature and env var access differ.
 
-```
-GEMINI_API_KEY=AIza...
-```
+---
 
-## Production — Standalone Worker
+## Local development
 
-If the frontend is hosted elsewhere, deploy `worker/ask.js` as a Cloudflare
-Worker and build the frontend with:
-
-```env
-VITE_AI_ENDPOINT=https://your-worker.your-subdomain.workers.dev/ask
-```
-
-The Worker sends CORS headers, so it works from any hosted frontend.
-
-Set the secret in wrangler:
-
-```sh
-npx wrangler secret put GEMINI_API_KEY
-```
-
-## Local Development
-
-Create `.dev.vars` in the project root:
+Create `math-vis/.dev.vars` (already in `.gitignore`):
 
 ```
 GEMINI_API_KEY=AIza...
 ```
 
-Run the Worker on port 8787, then run Vite. The Vite proxy forwards `/ask`
-to the local Worker automatically.
+Run the local Cloudflare Worker (Wrangler) in one terminal and Vite in another:
 
 ```sh
-npm run dev:ai            # terminal 1 — Worker on :8787
-npm run dev               # terminal 2 — Vite on :5173
+# Terminal 1 — Worker on :8787
+cd math-vis && npx wrangler dev
+
+# Terminal 2 — Vite on :5173
+cd math-vis && npm run dev
 ```
 
-If the Worker is offline or the key is missing, the frontend falls back to
-local demo responses so the visual studio still runs without AI.
+Vite proxies `/ask` → `http://127.0.0.1:8787` automatically (configured in `vite.config.js`).
+Open http://localhost:5173.
+
+---
+
+## Cloudflare alternative
+
+`worker/ask.js` is the original Cloudflare Worker version. If you prefer Cloudflare Pages:
+
+1. Remove or ignore `netlify.toml`
+2. The `functions/ask.js` file at the project root is a thin Pages Function wrapper
+   that delegates to `worker/ask.js` — it's picked up automatically by Cloudflare Pages
+3. Add `GEMINI_API_KEY` as a secret in the Cloudflare Pages dashboard
+
+---
 
 ## Model
 
-The Worker uses `gemini-2.5-flash`. To switch models, change
-the `GEMINI_MODEL` constant in `worker/ask.js`.
+Both the Netlify edge function and the Cloudflare Worker use `gemini-2.5-flash`.
+To switch models, change the `GEMINI_MODEL` constant at the top of either file.
+
+Deep explain questions use Gemini's thinking mode (`thinkingBudget: 512`).
+Quick slider/equation lookups disable thinking (`thinkingBudget: 0`) to reduce latency.

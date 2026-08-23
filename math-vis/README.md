@@ -1,62 +1,110 @@
-# Prism
-Site: https://ai-math-ald.pages.dev
+# Prism · AI Math Visualization Studio
 
-An interactive 3D mathematics visualisation studio with an AI professor that explains what you're looking at — live equations, rendered with KaTeX, grounded in the current visual state.
+**Live demo → `[your-site].netlify.app`**
 
-Built with Three.js, Vite, and Gemini 2.5 Flash running on a Cloudflare Worker.
+An interactive 3D mathematics visualization studio where every exhibit is a live mathematical instrument. Seven classical systems — parametric curves, Fourier epicycles, chaos attractors, sculptural surfaces, knots, and complex analysis — rendered in real-time WebGL with a built-in AI professor that explains the math behind what you're watching, grounded in the current visual state and your exact parameter values.
 
----
-
-## Modes
-
-| Mode | What it shows |
-|---|---|
-| **Lissajous** | Parametric orbits driven by two independent frequencies |
-| **Fourier** | Rotating epicycles that reconstruct any periodic signal |
-| **Rose Curves** | Polar petal symmetries lifted into 3D |
-| **Attractors** | Lorenz, Rössler, and other chaotic dynamical systems |
-| **Surfaces** | 16 mathematical surfaces — tori, minimal surfaces, algebraic forms — with live distortion, Hopf fibration, and Morse theory exhibits |
-| **Knots** | Torus knots, figure-eight knot, and Borromean rings rendered as smooth tubes |
-| **Complex Analysis** | Domain-coloured complex functions, Riemann sphere, and multi-sheeted branch surfaces |
+Built as a portfolio project to demonstrate full-stack AI application design, real-time graphics programming, and system architecture decision-making.
 
 ---
 
-## AI Professor
+## The Seven Exhibits
 
-Click **AI** to open the side panel. Four tabs:
-
-- **Ask** — free-form questions about the current visualisation
-- **Lesson** — full textbook-style lesson with rendered equations
-- **Variables** — symbol-by-symbol reference guide
-- **Examples** — real-world connections to the current mathematics
-
-Powered by Gemini 2.5 Flash via a Cloudflare Worker. The API key never reaches the browser.
-
----
-
-## Stack
-
-- **Three.js** — 3D rendering and WebGL
-- **Vite** — dev server and bundler
-- **GSAP** — mode transitions and UI animation
-- **Tweakpane** — parameter controls
-- **KaTeX** — equation rendering
-- **Cloudflare Workers / Pages Functions** — AI backend proxy
-- **Google Gemini 2.5 Flash** — free-tier AI (get a key at [aistudio.google.com](https://aistudio.google.com/apikey))
+| Exhibit | Mathematics | What you see |
+|---|---|---|
+| **Lissajous** | Parametric curves: $x = A\sin(at + \delta),\ y = B\sin(bt)$ | A luminous orbit that closes into geometric figures when the frequency ratio $a:b$ is rational |
+| **Fourier** | Phasor decomposition: $z(t) = \sum A_n e^{i\omega_n t}$ | Rotating epicycles that reconstruct any periodic signal — watch Gibbs phenomenon at sharp discontinuities |
+| **Rose Curves** | Polar: $r = \cos(k\theta)$, lifted to $z = \cos(m\theta)$ | Petal symmetries that shift from $k$ to $2k$ petals based on parity, extended into spherical-harmonic shapes |
+| **Attractors** | Lorenz, Rössler, Aizawa, and Thomas chaotic systems | Strange attractors traced by a deterministic trajectory — two near-identical starts diverge exponentially |
+| **Surfaces** | Gaussian curvature $K$, Hopf fibration, Morse theory | 16 mathematical surfaces with live distortion (twist, inflate, noise, pinch) and domain-colour curvature mapping |
+| **Knots** | Torus knots $T(p,q)$, parallel transport framing | Smooth tube meshes for the trefoil, figure-eight, and Borromean rings with a writhe perturbation slider |
+| **Complex Analysis** | Domain colouring: hue = $\arg f(z)$, height = $|f(z)|$ | Poles spike upward, zeros dip, branch cuts appear as colour discontinuities — Riemann sphere projection included |
 
 ---
 
-## Running locally
+## Features
+
+### AI Professor
+- **Four response modes** — Ask (free-form), Lesson (full textbook-style notes), Variables (symbol guide), Examples (real-world connections)
+- **Context-aware** — every query includes the current mode, equation, and live parameter values so answers are grounded in exactly what you're looking at
+- **Conversation memory** — the Ask tab maintains a multi-turn thread; prior exchanges are sent to Gemini so follow-up questions work naturally
+- **Thinking mode** — deep explain questions use `thinkingBudget: 512` in Gemini 2.5 Flash for more considered mathematical reasoning
+- **Session cache** — responses are cached in `sessionStorage` (max 60 entries) to avoid redundant API calls and stay well within the free-tier rate limits (15 req/min, 1,500 req/day)
+- **Token budgeting** — each intent sends a `responseLimit` so quick slider lookups use ~320 tokens and full lessons use ~2,400
+
+### Visualization Engine
+- **Real-time WebGL** via Three.js with a custom post-FX pipeline — bloom, chromatic aberration, and vignette
+- **GSAP-choreographed transitions** — mode switches are staged timelines (fade → bloom spike → scene swap → settle), not simple crossfades
+- **Live equation panel** — KaTeX-rendered equation updates as you drag sliders, keeping math and motion in sync
+- **GPU analytics HUD** — draw call count, triangle count, and per-frame render time measured against the WebGL info API
+- **Audio-reactive bloom** — optional microphone input modulates the bloom strength in real time
+
+### UX
+- **URL hash state** — parameters are serialized to `#mode=chaos&p=BASE64(JSON)` so any configuration is shareable as a link
+- **First-visit onboarding** — a 4-step GSAP spotlight coach mark tour, localStorage-gated so it appears once and never again
+- **Gallery with animated previews** — each exhibit card shows a CSS-animated mathematical SVG (Lissajous butterfly, Lorenz wings, torus wireframe, trefoil, domain-colour wheel)
+- **PNG capture** — one-click screenshot of the current canvas frame
+
+---
+
+## Architecture
+
+### Why a server-side AI proxy?
+
+The Gemini API key must never reach the browser — anyone who can read browser network traffic could extract it and make requests on your behalf. Prism routes all AI calls through a **Netlify Edge Function** (`netlify/edge-functions/ask.js`) that runs on Deno at the network edge.
+
+```
+Browser → POST /ask (question + context JSON)
+       → Netlify Edge Function (reads GEMINI_API_KEY from env)
+       → Gemini 2.5 Flash (streamGenerateContent?alt=sse)
+       → SSE stream back to browser (event: delta / data: [DONE])
+```
+
+The edge function and the frontend share the same Netlify origin so no CORS configuration is needed for the deployed site. The proxy is ~250 lines of vanilla JS with no dependencies — no framework overhead at the network edge.
+
+### Streaming SSE pipeline
+
+Gemini's `alt=sse` endpoint streams `data: {...}` lines as the model generates text. The edge function reads these chunks via `ReadableStream`, extracts `candidates[0].content.parts[0].text`, and re-emits them as `event: delta` SSE events. The browser's `EventSource`-style fetch listener appends each delta to the UI in real time, giving the typewriter effect without buffering the full response.
+
+### Multi-turn conversation
+
+Conversation history is stored client-side as `{ role: 'user' | 'model', text }` pairs. On each Ask-tab submission, the last four exchanges are mapped to Gemini's `contents` array format and prepended before the current message. A guard loop enforces strictly alternating `user/model` roles (Gemini rejects malformed sequences).
+
+### Context compaction
+
+The full visualization context (mode, equation, params, lesson notes) can get large. For quick slider or equation queries, `compactContext()` strips lesson notes and returns only the essential fields, keeping token usage low. For full explain/lesson requests, the complete context is included, trimmed only if it exceeds 22,000 characters.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| 3D rendering | [Three.js](https://threejs.org) | WebGL abstraction with post-FX pipeline support |
+| Bundler | [Vite](https://vitejs.dev) | Fast HMR, GLSL plugin, tree-shaking |
+| Animation | [GSAP](https://gsap.com) | Timeline-based choreography for mode transitions and UI |
+| Controls | [Tweakpane](https://tweakpane.info) | Clean parametric sliders with binding API |
+| Math rendering | [KaTeX](https://katex.org) | Fast, accurate LaTeX rendering in the browser |
+| AI model | [Gemini 2.5 Flash](https://aistudio.google.com) | Free tier, fast, streaming SSE, thinking mode |
+| Edge runtime | [Netlify Edge Functions](https://docs.netlify.com/edge-functions/overview/) | Deno-based, same Web APIs as Cloudflare Workers, co-deployed with frontend |
+| Hosting | [Netlify](https://netlify.com) | GitHub-connected auto-deploy, free tier |
+
+---
+
+## Running Locally
+
+You need two terminals — one for the frontend (Vite) and one for the AI backend (Wrangler local Worker).
 
 ### 1. Install dependencies
 
 ```sh
+cd math-vis
 npm install
 ```
 
 ### 2. Add your Gemini API key
 
-Create `.dev.vars` in the project root (gitignored):
+Create `math-vis/.dev.vars` (already gitignored):
 
 ```
 GEMINI_API_KEY=AIza...
@@ -64,37 +112,76 @@ GEMINI_API_KEY=AIza...
 
 Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — no credit card required.
 
-### 3. Start the AI worker and dev server
+Free tier: **15 req/min · 1,500 req/day · 1M tokens/min**
+
+### 3. Start both servers
 
 ```sh
-npx wrangler dev    # terminal 1 — Worker on :8787
-npm run dev         # terminal 2 — Vite on :5173
+# Terminal 1 — AI Worker on :8787
+cd math-vis && npx wrangler dev
+
+# Terminal 2 — Vite frontend on :5173
+cd math-vis && npm run dev
 ```
 
-The Vite proxy forwards `/ask` to the local Worker automatically. If the Worker is offline, the app falls back to local demo responses.
+Vite proxies `/ask` → `http://127.0.0.1:8787` automatically. Open **http://localhost:5173**.
 
 ---
 
-## Deploying to Cloudflare Pages
+## Deploying to Netlify
+
+Netlify auto-deploys on every push to `main` — both the frontend and the edge function.
+
+### First-time setup
 
 1. Push the repo to GitHub
-2. Connect it to [Cloudflare Pages](https://pages.cloudflare.com)
-3. Set build command: `npm run build`, output directory: `dist`
-4. Add a **secret** in the Pages dashboard: `GEMINI_API_KEY=AIza...`
+2. Go to [netlify.com](https://netlify.com) → **Add new site → Import from Git**
+3. Select the repo — `netlify.toml` is detected automatically (base: `math-vis`, build: `npm run build`, publish: `dist`)
+4. Go to **Site configuration → Environment variables** and add:
+   ```
+   GEMINI_API_KEY = AIza...
+   ```
+5. Trigger a deploy — **Deploys → Trigger deploy → Deploy site**
 
-The `functions/ask.js` file is picked up automatically as a Pages Function at `/ask`.
+After that, every `git push origin main` deploys automatically.
+
+### How it works
+
+The `netlify.toml` at the repo root routes `/ask` to `math-vis/netlify/edge-functions/ask.js`. This edge function runs on Deno at Netlify's edge, reads `GEMINI_API_KEY` from the environment, and proxies the streaming Gemini request back to the browser.
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
-src/
-  core/         renderer, particles, audio, AI panel, math renderer
-  modes/        one file per visualisation mode
-  shaders/      GLSL fragment shaders
-worker/
-  ask.js        Cloudflare Worker — Gemini SSE proxy
-functions/
-  ask.js        Pages Function wrapper
+math-vis/
+├── src/
+│   ├── core/
+│   │   ├── renderer.js        # Three.js scene, post-FX (bloom, chromatic aberration)
+│   │   ├── ai-panel.js        # AI professor UI — tabs, streaming, conversation cache
+│   │   ├── onboarding.js      # First-visit GSAP coach mark tour
+│   │   ├── audio.js           # Web Audio API analyser for bloom reactivity
+│   │   ├── particles.js       # Background curl-noise particle field
+│   │   ├── math-render.js     # KaTeX equation rendering helpers
+│   │   └── ui.js              # Tweakpane annotation and panel utilities
+│   ├── modes/
+│   │   ├── lissajous.js       # Parametric orbit
+│   │   ├── fourier.js         # Epicycle Fourier synthesis
+│   │   ├── fourier-draw.js    # Draw-your-own waveform variant
+│   │   ├── rose.js            # Polar rose curves (2D + 3D lift)
+│   │   ├── chaos.js           # Lorenz / Rössler / Aizawa / Thomas attractors
+│   │   ├── surfaces.js        # 16 mathematical surfaces with distortion
+│   │   ├── knots.js           # Torus knots and links as tube meshes
+│   │   └── complex.js         # Domain-coloured complex functions
+│   ├── shaders/               # GLSL fragment shaders (domain colouring, curvature)
+│   ├── main.js                # Entry point — mode switching, URL state, HUD, analytics
+│   └── style.css              # All UI styles (~3,300 lines)
+├── netlify/
+│   └── edge-functions/
+│       └── ask.js             # Netlify Edge Function — Gemini SSE proxy (Deno runtime)
+├── worker/
+│   └── ask.js                 # Cloudflare Worker version (for wrangler local dev)
+├── netlify.toml               # Netlify build config and edge function routing
+├── vite.config.js             # Vite config — GLSL plugin, /ask proxy for local dev
+└── index.html                 # App shell
 ```
