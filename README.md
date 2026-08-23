@@ -29,7 +29,7 @@ Built as a portfolio project to demonstrate full-stack AI application design, re
 - **Context-aware** — every query includes the current mode, equation, and live parameter values so answers are grounded in exactly what you're looking at
 - **Conversation memory** — the Ask tab maintains a multi-turn thread; prior exchanges are sent to Gemini so follow-up questions work naturally
 - **Thinking mode** — deep explain questions use `thinkingBudget: 512` in Gemini 3.6 Flash for more considered mathematical reasoning
-- **Session cache** — responses are cached in `sessionStorage` (max 60 entries) to avoid redundant API calls and stay well within the free-tier rate limits (15 req/min, 1,500 req/day)
+- **Session cache** — responses are cached in `sessionStorage` (max 60 entries) to avoid redundant API calls and stay within free-tier rate limits
 - **Token budgeting** — each intent sends a `responseLimit` so quick slider lookups use ~320 tokens and full lessons use ~2,400
 
 ### Visualization Engine
@@ -51,7 +51,7 @@ Built as a portfolio project to demonstrate full-stack AI application design, re
 
 ### Why a server-side AI proxy?
 
-The Gemini API key must never reach the browser — anyone who can read browser network traffic could extract it and make requests on your behalf. Prism routes all AI calls through a **Netlify Edge Function** (`netlify/edge-functions/ask.js`) that runs on Deno at the network edge.
+The Gemini API key must never reach the browser — anyone who can read browser network traffic could extract it and make requests on your behalf. Prism routes all AI calls through a **Netlify Edge Function** (`math-vis/netlify/edge-functions/ask.js`) that runs on Deno at the network edge.
 
 ```
 Browser → POST /ask (question + context JSON)
@@ -110,9 +110,8 @@ Create `math-vis/.dev.vars` (already gitignored):
 GEMINI_API_KEY=AIza...
 ```
 
-Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — no credit card required.
-
-Free tier: **15 req/min · 1,500 req/day · 1M tokens/min**
+Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+Alternatively, create one via the [Google Cloud Console](https://console.cloud.google.com/apis/credentials) with the **Gemini API** enabled and linked to a billing account (no charge on free tier).
 
 ### 3. Start both servers
 
@@ -141,47 +140,44 @@ Netlify auto-deploys on every push to `main` — both the frontend and the edge 
    ```
    GEMINI_API_KEY = AIza...
    ```
-5. Trigger a deploy — **Deploys → Trigger deploy → Deploy site**
+5. Go to **Deploys → Trigger deploy → Deploy site** (env var changes require a manual redeploy)
 
 After that, every `git push origin main` deploys automatically.
-
-### How it works
-
-The `netlify.toml` at the repo root routes `/ask` to `math-vis/netlify/edge-functions/ask.js`. This edge function runs on Deno at Netlify's edge, reads `GEMINI_API_KEY` from the environment, and proxies the streaming Gemini request back to the browser.
 
 ---
 
 ## Project Structure
 
 ```
-math-vis/
-├── src/
-│   ├── core/
-│   │   ├── renderer.js        # Three.js scene, post-FX (bloom, chromatic aberration)
-│   │   ├── ai-panel.js        # AI professor UI — tabs, streaming, conversation cache
-│   │   ├── onboarding.js      # First-visit GSAP coach mark tour
-│   │   ├── audio.js           # Web Audio API analyser for bloom reactivity
-│   │   ├── particles.js       # Background curl-noise particle field
-│   │   ├── math-render.js     # KaTeX equation rendering helpers
-│   │   └── ui.js              # Tweakpane annotation and panel utilities
-│   ├── modes/
-│   │   ├── lissajous.js       # Parametric orbit
-│   │   ├── fourier.js         # Epicycle Fourier synthesis
-│   │   ├── fourier-draw.js    # Draw-your-own waveform variant
-│   │   ├── rose.js            # Polar rose curves (2D + 3D lift)
-│   │   ├── chaos.js           # Lorenz / Rössler / Aizawa / Thomas attractors
-│   │   ├── surfaces.js        # 16 mathematical surfaces with distortion
-│   │   ├── knots.js           # Torus knots and links as tube meshes
-│   │   └── complex.js         # Domain-coloured complex functions
-│   ├── shaders/               # GLSL fragment shaders (domain colouring, curvature)
-│   ├── main.js                # Entry point — mode switching, URL state, HUD, analytics
-│   └── style.css              # All UI styles (~3,300 lines)
-├── netlify/
-│   └── edge-functions/
-│       └── ask.js             # Netlify Edge Function — Gemini SSE proxy (Deno runtime)
-├── worker/
-│   └── ask.js                 # Cloudflare Worker version (for wrangler local dev)
-├── netlify.toml               # Netlify build config and edge function routing
-├── vite.config.js             # Vite config — GLSL plugin, /ask proxy for local dev
-└── index.html                 # App shell
+prism/
+├── math-vis/                          # The full application
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── renderer.js            # Three.js scene, post-FX pipeline
+│   │   │   ├── ai-panel.js            # AI professor UI — tabs, streaming, cache
+│   │   │   ├── onboarding.js          # First-visit GSAP coach mark tour
+│   │   │   ├── audio.js              # Web Audio API analyser
+│   │   │   ├── particles.js          # Background curl-noise particle field
+│   │   │   ├── math-render.js        # KaTeX equation rendering
+│   │   │   └── ui.js                 # Tweakpane annotation utilities
+│   │   ├── modes/
+│   │   │   ├── lissajous.js          # Parametric orbit
+│   │   │   ├── fourier.js            # Epicycle Fourier synthesis
+│   │   │   ├── rose.js               # Polar rose curves
+│   │   │   ├── chaos.js              # Lorenz / Rössler / Aizawa / Thomas
+│   │   │   ├── surfaces.js           # 16 mathematical surfaces
+│   │   │   ├── knots.js              # Torus knots as tube meshes
+│   │   │   └── complex.js            # Domain-coloured complex functions
+│   │   ├── shaders/                  # GLSL fragment shaders
+│   │   ├── main.js                   # Entry point — mode switching, URL state, HUD
+│   │   └── style.css                 # All UI styles
+│   ├── netlify/
+│   │   └── edge-functions/
+│   │       └── ask.js                # Netlify Edge Function — Gemini SSE proxy
+│   ├── worker/
+│   │   └── ask.js                    # Cloudflare Worker version (local dev)
+│   ├── vite.config.js
+│   └── index.html
+├── netlify.toml                       # Build config and edge function routing
+└── README.md
 ```
