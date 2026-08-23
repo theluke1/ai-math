@@ -1627,16 +1627,13 @@
 
     #live-eq .katex-display {
       margin: 2px 0;
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow: hidden;
     }
 
-    /* Inline equations that exceed the panel width scroll rather than clip */
     #live-eq .katex-html {
       display: inline-block;
       max-width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow: hidden;
       vertical-align: middle;
     }
 
